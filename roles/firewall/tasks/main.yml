@@ -55,6 +55,16 @@
   when: "'network_node' in group_names"
   become: true
 
+- name: Allow gRPC ML server port from ML nodes only
+  ufw:
+    rule: allow
+    port: "{{ grpc_ml_server_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
+  when: "'network_node' in group_names"
+  become: true
+
 # ML node specific ports - RESTRICTED to network node only
 - name: Determine cluster name for ML nodes
   set_fact:

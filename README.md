@@ -213,7 +213,7 @@ curl http://localhost:9200/admin/v1/nodes
 - **✅ Public Ports**: 22 (SSH), 80/443 (HTTP/HTTPS), 8000 (API), 26657 (RPC)
 - **🔒 Restricted Ports**:
   - 5000 (Inference), 8080 (Management) - ML nodes only accessible from network node
-  - 9100 (DAPI ML Server) - Network node only accessible from ML nodes
+  - 9100 (DAPI ML Server), 9300 (gRPC ML Server) - Network node only accessible from ML nodes
 - **❌ Private Ports**: 9200 (Admin API) - SSH tunneling required
 - **🔒 Firewall**: UFW configured with minimal required ports + IP-based restrictions
 

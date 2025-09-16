@@ -67,6 +67,7 @@ p2p_port: 5000
 inference_port: 5000
 management_port: 8080
 dapi_ml_server_port: 9100
+grpc_ml_server_port: 9300
 
 # Docker configuration
 compose_project_name: "gonka-network"
