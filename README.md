@@ -102,6 +102,14 @@ gonka-cluster/
 
 ## ⚙️ Configuration
 
+### Docker Group Setup
+The deployment automatically configures Docker group permissions:
+- Creates `docker` group if it doesn't exist
+- Adds `ubuntu` user to the docker group
+- Refreshes group membership for immediate sudo-less Docker usage
+
+This ensures all Docker commands can run without requiring `sudo`.
+
 ### Update Server IPs
 
 Edit `inventory.ini` and replace placeholder IPs with your actual server IPs:

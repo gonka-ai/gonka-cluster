@@ -510,6 +510,8 @@ model_configs:
 ```
 
 #### 2.3 Docker Environment Preparation (docker role)
+- **Docker Group Setup**: Create docker group and add ubuntu user (allows sudo-less Docker usage)
+- **Group Membership**: Configure user permissions for seamless Docker operations
 - **Docker compose pull**: Pull all images from compose files on ALL servers
 - **NVIDIA runtime**: GPU compatibility verification on all servers
 - **Compose validation**: Verify configuration files on all servers

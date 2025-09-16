@@ -1,6 +1,26 @@
 ---
 # Docker Environment Preparation Role
-# Pull Docker images and validate configuration
+# Configure Docker group and pull images
+
+- name: Create docker group if it doesn't exist
+  group:
+    name: docker
+    state: present
+  become: true
+
+- name: Add ubuntu user to docker group
+  user:
+    name: ubuntu
+    groups: docker
+    append: yes
+  become: true
+
+- name: Refresh user groups (apply docker group membership)
+  command: newgrp docker
+  become: true
+  become_user: ubuntu
+  ignore_errors: true
+  changed_when: false
 
 - name: Pull all Docker images
   command: docker compose -f docker-compose.yml -f docker-compose.mlnode.yml pull
