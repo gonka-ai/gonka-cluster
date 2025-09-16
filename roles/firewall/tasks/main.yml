@@ -39,6 +39,22 @@
   when: "'network_node' in group_names"
   become: true
 
+# DAPI API ML Server Port - RESTRICTED to ML nodes only
+- name: Determine cluster name for network node
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+  when: "'network_node' in group_names"
+
+- name: Allow DAPI API ML server port from ML nodes only
+  ufw:
+    rule: allow
+    port: "{{ dapi_ml_server_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
+  when: "'network_node' in group_names"
+  become: true
+
 # ML node specific ports - RESTRICTED to network node only
 - name: Determine cluster name for ML nodes
   set_fact:

@@ -323,6 +323,7 @@ pipelining = True
 - **UFW module**: Ansible's ufw module for firewall management
 - **Conditional port opening**: Different ports for different server roles
   - **Network node**: Opens ports 5000, 26657, 8000 (blockchain + API services)
+  - **Network node DAPI ML Port (9100)**: RESTRICTED to ML nodes only for DAPI communication
 - **Admin API (9200)**: NOT exposed publicly - access via SSH tunneling only
   - **ML nodes**: Opens ports 5000, 8080 (inference + management) **BUT ONLY FROM NETWORK NODE IP**
 - **Security**: ML node ports are restricted to network node access only for enhanced security
