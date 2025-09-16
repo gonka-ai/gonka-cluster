@@ -21,7 +21,7 @@
     --keyring-backend file
     --home ./gonka-keys-{{ cluster_name }}
     --gas 2000000
-    --node http://node2.gonka.ai:8000/chain-rpc/
+    --node {{ seed_node_rpc_url }}
   args:
     chdir: .  # Current directory where Ansible script is run
   environment:

@@ -893,7 +893,7 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
     --keyring-backend file
     --home ./gonka-keys-{{ cluster_name }}
     --gas 2000000
-    --node http://node2.gonka.ai:8000/chain-rpc/
+    --node {{ seed_node_rpc_url }}
   vars:
     cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
   args:
