@@ -13,6 +13,7 @@
 
 - name: Grant ML operation permissions using cluster-specific account key
   shell: >
+    printf '%s\n' "$KEYRING_PASSWORD" |
     ./inferenced tx inference grant-ml-ops-permissions
     {{ cluster_name }}-account-key
     {{ ml_operational_address }}
@@ -23,6 +24,8 @@
     --node http://node2.gonka.ai:8000/chain-rpc/
   args:
     chdir: .  # Current directory where Ansible script is run
+  environment:
+    KEYRING_PASSWORD: "{{ keyring_password }}"
   register: permission_grant
   failed_when: "'error' in permission_grant.stderr or 'Transaction confirmed successfully' not in permission_grant.stdout"
   when: ml_operational_address is defined

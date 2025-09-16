@@ -6,6 +6,7 @@
   shell: >
     source {{ gonka_deploy_dir }}/config.env &&
     docker compose run --rm --no-deps -T api /bin/sh -c '
+    printf "%s\n" "$KEYRING_PASSWORD" |
     inferenced register-new-participant \
       $DAPI_API__PUBLIC_URL \
       $ACCOUNT_PUBKEY \

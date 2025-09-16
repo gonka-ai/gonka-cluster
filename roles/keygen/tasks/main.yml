@@ -12,7 +12,6 @@
   args:
     chdir: "{{ gonka_deploy_dir }}"
   register: ml_key_creation
-  no_log: true
 
 - name: Secure backup of mnemonic
   copy:

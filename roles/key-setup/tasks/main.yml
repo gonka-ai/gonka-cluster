@@ -7,12 +7,15 @@
     cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
 
 - name: Extract cluster account public key
-  command: >
+  shell: >
+    printf '%s\n' "$KEYRING_PASSWORD" |
     ./inferenced keys show gonka-account-key-{{ cluster_name }}
     --keyring-backend file
     --home ./gonka-keys-{{ cluster_name }}
   register: account_key_info
   failed_when: "'gonka1' not in account_key_info.stdout"
+  environment:
+    KEYRING_PASSWORD: "{{ keyring_password }}"
 
 - name: Store cluster account pubkey
   set_fact:

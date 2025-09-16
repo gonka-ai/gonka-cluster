@@ -161,7 +161,8 @@ This deployment uses **Ansible** for orchestration, providing:
 ```yaml
 # Extract public key for Cluster 1
 - name: Extract cluster1 account public key
-  command: >
+  shell: >
+    printf '%s\n' "$KEYRING_PASSWORD" |
     ./inferenced keys show gonka-account-key-cluster1
     --keyring-backend file
     --home ./gonka-keys-cluster1
@@ -170,7 +171,8 @@ This deployment uses **Ansible** for orchestration, providing:
 
 # Extract public key for Cluster 2
 - name: Extract cluster2 account public key
-  command: >
+  shell: >
+    printf '%s\n' "$KEYRING_PASSWORD" |
     ./inferenced keys show gonka-account-key-cluster2
     --keyring-backend file
     --home ./gonka-keys-cluster2
@@ -592,7 +594,8 @@ model_configs:
 
 # Extract public key and address
 - name: Extract account public key
-  command: >
+  shell: >
+    printf '%s\n' "$KEYRING_PASSWORD" |
     ./inferenced keys show gonka-account-key
     --keyring-backend file
     --home ./gonka-keys
@@ -801,6 +804,7 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
   shell: >
     source /opt/gonka-deploy/config.env &&
     docker compose run --rm --no-deps -T api /bin/sh -c '
+    printf "%s\n" "$KEYRING_PASSWORD" |
     inferenced register-new-participant \
       $DAPI_API__PUBLIC_URL \
       $ACCOUNT_PUBKEY \
@@ -881,6 +885,7 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
 # Block height: 174
 - name: Grant ML operation permissions using cluster-specific account key
   shell: >
+    printf '%s\n' "$KEYRING_PASSWORD" |
     ./inferenced tx inference grant-ml-ops-permissions
     {{ cluster_name }}-account-key
     {{ ml_operational_address }}

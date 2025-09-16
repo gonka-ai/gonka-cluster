@@ -8,7 +8,15 @@ This repository contains Ansible scripts for deploying two independent Gonka Net
 
 **Note:** The `inferenced` CLI binary should be placed in the same directory as the Ansible deployment scripts. The deployment will run CLI commands from the current working directory.
 
-1. **Generate Account Keys** (run locally first):
+1. **Set Keyring Password Environment Variable**:
+```bash
+# Set the password that will be used for all key operations
+export GONKA_KEYRING_PASSWORD="your-secure-password-here"
+
+# Keep this variable set for the entire deployment process
+```
+
+2. **Generate Account Keys** (run locally with the environment variable set):
 ```bash
 # Generate account key for Cluster 1
 ./inferenced keys add gonka-account-key-cluster1 --keyring-backend file --home ./gonka-keys-cluster1
@@ -17,9 +25,9 @@ This repository contains Ansible scripts for deploying two independent Gonka Net
 ./inferenced keys add gonka-account-key-cluster2 --keyring-backend file --home ./gonka-keys-cluster2
 ```
 
-2. **Update Inventory** - Replace placeholder IPs in `inventory.ini` with your actual server IPs
+3. **Update Inventory** - Replace placeholder IPs in `inventory.ini` with your actual server IPs
 
-3. **Install Ansible** on your deployment machine:
+4. **Install Ansible** on your deployment machine:
 ```bash
 pip install ansible
 ansible-galaxy collection install community.docker ansible.posix
@@ -27,7 +35,12 @@ ansible-galaxy collection install community.docker ansible.posix
 
 ### Deploy Clusters
 
+**Important:** Keep the `GONKA_KEYRING_PASSWORD` environment variable set during the entire deployment process.
+
 ```bash
+# Ensure environment variable is set
+echo $GONKA_KEYRING_PASSWORD  # Should show your password
+
 # Run complete deployment
 ansible-playbook -i inventory.ini playbooks/deploy.yml
 
@@ -255,8 +268,23 @@ ansible-playbook -i inventory.ini playbooks/cleanup.yml --limit cluster1
 
 ## 🔐 Security Notes
 
+- **Environment Variable**: `GONKA_KEYRING_PASSWORD` is used for all key operations
+- **Secure Storage**: Never store passwords in files or version control
+- **Session Only**: Set environment variable only for deployment duration
 - **Separate Account Keys**: Each cluster uses its own account key
 - **Isolated Keyrings**: `./gonka-keys-cluster1`, `./gonka-keys-cluster2`
 - **Firewall Rules**: Only required ports are open
 - **SSH Keys**: Key-based authentication only
 - **Backup Keys**: ML operational key mnemonics are backed up
+
+### Environment Variable Management
+```bash
+# Set password for deployment
+export GONKA_KEYRING_PASSWORD="your-password"
+
+# Run deployment
+ansible-playbook -i inventory.ini playbooks/deploy.yml
+
+# Clear password when done
+unset GONKA_KEYRING_PASSWORD
+```
