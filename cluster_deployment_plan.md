@@ -324,7 +324,8 @@ pipelining = True
 - **Conditional port opening**: Different ports for different server roles
   - **Network node**: Opens ports 5000, 26657, 8000 (blockchain + API services)
 - **Admin API (9200)**: NOT exposed publicly - access via SSH tunneling only
-  - **ML nodes**: Opens ports 5000, 8080 (inference + management)
+  - **ML nodes**: Opens ports 5000, 8080 (inference + management) **BUT ONLY FROM NETWORK NODE IP**
+- **Security**: ML node ports are restricted to network node access only for enhanced security
 - **External mapping**: Ports 5050/8080 mapped externally to ML node 5000/8080
 - **Group-based configuration**: Uses Ansible host groups for role-specific rules
 - **Rule validation**: Verify firewall rules are applied correctly

@@ -39,15 +39,27 @@
   when: "'network_node' in group_names"
   become: true
 
-# ML node specific ports
-- name: Allow ML node ports
+# ML node specific ports - RESTRICTED to network node only
+- name: Determine cluster name for ML nodes
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+  when: "'ml_nodes' in group_names"
+
+- name: Allow ML node inference port from network node only
   ufw:
     rule: allow
-    port: "{{ item }}"
+    port: "{{ inference_port }}"
     proto: tcp
-  loop:
-    - "{{ inference_port }}"    # Inference requests
-    - "{{ management_port }}"   # Management API
+    from_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
+  when: "'ml_nodes' in group_names"
+  become: true
+
+- name: Allow ML node management port from network node only
+  ufw:
+    rule: allow
+    port: "{{ management_port }}"
+    proto: tcp
+    from_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
   when: "'ml_nodes' in group_names"
   become: true
 

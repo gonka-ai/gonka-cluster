@@ -210,9 +210,10 @@ curl http://localhost:9200/admin/v1/nodes
 
 ### Port Security
 
-- **✅ Public Ports**: 22 (SSH), 80/443 (HTTP/HTTPS), 8000 (API), 26657 (RPC), 5000 (Inference)
+- **✅ Public Ports**: 22 (SSH), 80/443 (HTTP/HTTPS), 8000 (API), 26657 (RPC)
+- **🔒 Restricted Ports**: 5000 (Inference), 8080 (Management) - ML nodes only accessible from network node
 - **❌ Private Ports**: 9200 (Admin API) - SSH tunneling required
-- **🔒 Firewall**: UFW configured with minimal required ports
+- **🔒 Firewall**: UFW configured with minimal required ports + IP-based restrictions
 
 ## 🚨 Troubleshooting
 
