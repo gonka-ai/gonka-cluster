@@ -1,0 +1,43 @@
+---
+# ML Node Deployment Role
+# Deploy ML inference services on worker nodes
+
+- name: Deploy ML services
+  shell: >
+    export HF_HOME={{ hf_home }} &&
+    docker compose -f docker-compose.mlnode.yml up -d
+  args:
+    chdir: "{{ gonka_deploy_dir }}"
+  register: ml_deployment
+
+- name: Wait for ML inference service to be ready
+  uri:
+    url: "http://{{ ansible_host }}:{{ inference_port }}/health"
+    method: GET
+  register: ml_health
+  until: ml_health.status == 200
+  retries: 30
+  delay: 10
+
+- name: Verify GPU access in ML containers
+  command: >
+    docker exec $(docker ps -q -f name=gonka-ml) nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits
+  register: gpu_check
+  failed_when: gpu_check.stdout | length == 0
+
+- name: Check model loading (optional - may not be immediately available)
+  uri:
+    url: "http://{{ ansible_host }}:{{ inference_port }}/health"
+    method: GET
+  register: model_health
+  ignore_errors: true
+
+- name: Display ML deployment success
+  debug:
+    msg: |
+      🚀 ML Node {{ inventory_hostname }} deployed successfully!
+      🎯 Inference API: http://{{ ansible_host }}:{{ inference_port }}
+      🔍 Service health: {{ ml_health.status == 200 | ternary('OK', 'FAILED') }}
+      🎮 GPU memory: {{ gpu_check.stdout | default('checking...') }} MB used
+      🧠 Model status: {{ model_health.status == 200 | ternary('READY', 'LOADING...') }}
+      ⏳ Ready for network registration

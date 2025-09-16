@@ -1,0 +1,34 @@
+---
+# Network Initialization Role
+# Start initial blockchain services on network nodes
+
+- name: Start initial services (tmkms and node)
+  shell: >
+    source {{ gonka_deploy_dir }}/config.env &&
+    docker compose up tmkms node -d --no-deps
+  args:
+    chdir: "{{ gonka_deploy_dir }}"
+  register: init_services
+
+- name: Wait for Tendermint RPC to be available
+  uri:
+    url: "http://localhost:{{ rpc_port }}/status"
+    method: GET
+  register: rpc_check
+  until: rpc_check.status == 200
+  retries: 30
+  delay: 10
+
+- name: Verify blockchain synchronization
+  uri:
+    url: "http://localhost:{{ rpc_port }}/status"
+    method: GET
+  register: sync_status
+
+- name: Display network initialization success
+  debug:
+    msg: |
+      ✅ Network services initialized on {{ inventory_hostname }}
+      🔗 Tendermint RPC: {{ rpc_check.status == 200 | ternary('READY', 'FAILED') }}
+      ⛓️  Blockchain: {{ sync_status.json.result.sync_info.catching_up | ternary('SYNCING', 'SYNCED') }}
+      🚀 Ready for key generation and registration

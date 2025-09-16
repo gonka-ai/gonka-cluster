@@ -1,0 +1,53 @@
+---
+# Repository Validation Role
+# Validates that repository was cloned correctly and configuration files are present
+
+- name: Check that Gonka repository directory exists
+  stat:
+    path: "{{ gonka_repo_dir }}"
+  register: repo_dir
+  failed_when: not repo_dir.stat.exists
+
+- name: Check that deploy/join subdirectory exists
+  stat:
+    path: "{{ gonka_deploy_dir }}"
+  register: deploy_dir
+  failed_when: not deploy_dir.stat.exists
+
+- name: Validate deployment configuration files are present
+  stat:
+    path: "{{ gonka_deploy_dir }}/{{ item }}"
+  loop:
+    - docker-compose.yml
+    - docker-compose.mlnode.yml
+    - .gitignore
+  register: config_files
+  failed_when: config_files.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
+
+- name: Check that HF_HOME directory was created
+  stat:
+    path: "{{ hf_home }}"
+  register: hf_dir
+  failed_when: not hf_dir.stat.exists
+
+- name: Validate Docker images were pulled
+  command: docker images --format "table {{.Repository}}\t{{.Tag}}"
+  register: docker_images
+  changed_when: false
+  failed_when: docker_images.stdout_lines | length < 2
+
+- name: Generate repository validation report
+  debug:
+    msg: |
+      ✅ Repository Validation Report for {{ inventory_hostname }}
+      📁 Repository: {{ repo_dir.stat.exists | ternary('CLONED', 'MISSING') }}
+      🚀 Deploy Dir: {{ deploy_dir.stat.exists | ternary('EXISTS', 'MISSING') }}
+      📄 Config Files: {{ config_files.results | selectattr('stat.exists', 'equalto', true) | list | length }}/{{ config_files.results | length }} present
+      🤗 HF Cache: {{ hf_dir.stat.exists | ternary('CREATED', 'MISSING') }}
+      🐳 Docker Images: {{ docker_images.stdout_lines | length }} images available
+      🎯 Repository Status: VALIDATION {{ 'PASSED' if (
+        repo_dir.stat.exists and
+        deploy_dir.stat.exists and
+        hf_dir.stat.exists and
+        config_files.results | selectattr('stat.exists', 'equalto', true) | list | length == config_files.results | length
+      ) else 'FAILED' }}

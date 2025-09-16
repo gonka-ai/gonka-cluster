@@ -1,0 +1,86 @@
+---
+# Gonka Cluster Emergency Cleanup Playbook
+# Stops all services and cleans up deployment artifacts
+
+- name: Emergency Service Shutdown
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Stop all Docker containers
+      command: docker-compose down --remove-orphans
+      args:
+        chdir: "{{ gonka_deploy_dir }}"
+      ignore_errors: true
+
+    - name: Remove Docker networks and volumes
+      command: docker system prune -f --volumes
+      ignore_errors: true
+
+    - name: Stop Docker daemon
+      service:
+        name: docker
+        state: stopped
+      ignore_errors: true
+
+- name: Clean Deployment Artifacts
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Remove deployment directory
+      file:
+        path: "{{ gonka_deploy_dir }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Remove Hugging Face cache
+      file:
+        path: "{{ hf_home }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Clean package cache
+      command: apt clean
+      become: true
+      ignore_errors: true
+
+- name: Network Node Specific Cleanup
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Remove Tendermint data
+      file:
+        path: "{{ gonka_deploy_dir }}/.tendermint"
+        state: absent
+      ignore_errors: true
+
+    - name: Remove inference keyring
+      file:
+        path: "{{ gonka_deploy_dir }}/.inference"
+        state: absent
+      ignore_errors: true
+
+- name: Final System Reset
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Restart Docker service
+      service:
+        name: docker
+        state: restarted
+      ignore_errors: true
+
+    - name: Reset UFW firewall
+      ufw:
+        state: reset
+      become: true
+      ignore_errors: true
+
+    - name: Display cleanup completion
+      debug:
+        msg: |
+          🧹 Emergency cleanup completed on {{ inventory_hostname }}
+          ⚠️  Manual restart of services required for redeployment

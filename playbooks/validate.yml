@@ -1,0 +1,83 @@
+---
+# Gonka Cluster Validation Playbook
+# Validates deployment status and health of all components
+
+- name: Validate Cluster Deployment
+  hosts: gonka_clusters
+  gather_facts: true
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Check Docker containers status
+      command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+      register: container_status
+      changed_when: false
+
+    - name: Display container status
+      debug:
+        msg: "{{ container_status.stdout_lines }}"
+
+    - name: Check GPU utilization
+      command: nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits
+      register: gpu_status
+      changed_when: false
+      when: "'ml_nodes' in group_names"
+
+    - name: Display GPU status
+      debug:
+        msg: "{{ gpu_status.stdout_lines }}"
+      when: "'ml_nodes' in group_names and gpu_status.stdout is defined"
+
+- name: Validate Network Node Services
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Test Tendermint RPC endpoint
+      uri:
+        url: "http://localhost:{{ rpc_port }}/status"
+        method: GET
+      register: tendermint_status
+      failed_when: tendermint_status.status != 200
+
+    - name: Test API endpoints
+      uri:
+        url: "{{ item }}"
+        method: GET
+      loop:
+        - "http://localhost:{{ api_port }}/v1/status"
+        - "http://localhost:{{ api_port }}/v1/participants"
+      register: api_tests
+      failed_when: item.status != 200
+
+    - name: Display validation results
+      debug:
+        msg: |
+          ✅ Network Node {{ inventory_hostname }} Validation:
+          🔗 Tendermint RPC: {{ tendermint_status.status == 200 | ternary('OK', 'FAILED') }}
+          🌐 API Status: {{ api_tests.results[0].status == 200 | ternary('OK', 'FAILED') }}
+          👥 Participants: {{ api_tests.results[1].status == 200 | ternary('OK', 'FAILED') }}
+
+- name: Validate ML Node Services
+  hosts: cluster1_ml_nodes:cluster2_ml_nodes
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Test ML inference endpoint
+      uri:
+        url: "http://localhost:{{ inference_port }}/health"
+        method: GET
+      register: ml_health
+      failed_when: ml_health.status != 200
+
+    - name: Check model files
+      stat:
+        path: "{{ hf_home }}/Qwen"
+      register: model_files
+
+    - name: Display ML node validation
+      debug:
+        msg: |
+          ✅ ML Node {{ inventory_hostname }} Validation:
+          🚀 Inference Service: {{ ml_health.status == 200 | ternary('OK', 'FAILED') }}
+          🧠 Models Present: {{ model_files.stat.exists | ternary('YES', 'NO') }}

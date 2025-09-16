@@ -1,0 +1,42 @@
+---
+# Host Registration Role
+# Register network node with Gonka blockchain
+
+- name: Register host with Gonka Network
+  shell: >
+    source {{ gonka_deploy_dir }}/config.env &&
+    docker compose run --rm --no-deps -T api /bin/sh -c '
+    inferenced register-new-participant \
+      $DAPI_API__PUBLIC_URL \
+      $ACCOUNT_PUBKEY \
+      --node-address $DAPI_CHAIN_NODE__SEED_API_URL
+    '
+  args:
+    chdir: "{{ gonka_deploy_dir }}"
+  register: host_registration
+  failed_when: "'error' in host_registration.stderr"
+
+- name: Extract ML operational address from registration output
+  set_fact:
+    ml_operational_address: "{{ host_registration.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+  when: host_registration.stdout is defined
+
+- name: Wait for registration confirmation
+  uri:
+    url: "{{ public_url }}/v1/participants/{{ ml_operational_address | default('unknown') }}"
+    method: GET
+  register: registration_check
+  until: registration_check.status == 200
+  retries: 30
+  delay: 10
+  when: ml_operational_address is defined
+
+- name: Display registration success
+  debug:
+    msg: |
+      ✅ Host registered successfully on {{ inventory_hostname }}
+      🌐 Public URL: {{ public_url }}
+      🔑 Account Key: {{ account_pubkey | truncate(20) }}...
+      📍 ML Address: {{ ml_operational_address | default('NOT EXTRACTED') }}
+      ✅ Registration: {{ registration_check.status == 200 | ternary('CONFIRMED', 'PENDING') }}
+      🚀 Ready for permission granting

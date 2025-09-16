@@ -1,0 +1,79 @@
+# Gonka Cluster Deployment Variables
+
+# Model configurations
+model_list:
+  small:
+    - name: "Qwen/Qwen2.5-7B-Instruct"
+      size: "~15GB"
+      description: "Base Qwen2.5 7B model for basic inference"
+    - name: "RedHatAI/Qwen2.5-7B-Instruct-quantized.w8a16"
+      size: "~4GB"
+      description: "Quantized Qwen2.5 7B model (optimized for efficiency)"
+  medium:
+    - name: "Qwen/Qwen3-32B-FP8"
+      size: "~16GB"
+      description: "Qwen3 32B model with FP8 quantization"
+    - name: "Qwen/QwQ-32B"
+      size: "~20GB"
+      description: "QwQ 32B reasoning model"
+  large:
+    - name: "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+      size: "~120GB"
+      description: "Large Qwen3 235B model with FP8 quantization"
+
+# Cluster model assignment variables
+cluster_models:
+  cluster1:
+    network_node_model: "Qwen/Qwen3-32B-FP8"  # Network node runs Qwen3-32B
+    ml_node_models:
+      - model: "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+        count: 4  # 4 ML nodes run Qwen3-235B
+      - model: "Qwen/Qwen3-32B-FP8"
+        count: 1  # 1 ML node runs Qwen3-32B
+  cluster2:
+    network_node_model: "Qwen/Qwen3-32B-FP8"  # Network node runs Qwen3-32B
+    ml_node_models:
+      - model: "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+        count: 4  # 4 ML nodes run Qwen3-235B
+      - model: "Qwen/Qwen3-32B-FP8"
+        count: 1  # 1 ML node runs Qwen3-32B
+
+# Model configuration for vLLM arguments
+model_configs:
+  "Qwen/Qwen3-32B-FP8":
+    args: []
+  "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8":
+    args: ["--max-model-len", "240000", "--tensor-parallel-size", "4"]
+
+# Deployment configuration
+keyring_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits,hexdigits') }}"
+key_name: "gonka-ml-key"
+
+# Directory paths
+gonka_repo_dir: "/opt/gonka-repo"
+gonka_deploy_dir: "/opt/gonka-repo/deploy/join"
+hf_home: "/mnt/shared"
+gonka_keys_dir: "./gonka-keys"
+
+# Network configuration
+seed_api_url: "http://node2.gonka.ai:8000"
+seed_node_rpc_url: "http://node2.gonka.ai:26657"
+seed_node_p2p_url: "tcp://node2.gonka.ai:5000"
+
+# Service configuration
+api_port: 8000
+rpc_port: 26657
+p2p_port: 5000
+inference_port: 5000
+management_port: 8080
+
+# Docker configuration
+compose_project_name: "gonka-network"
+compose_files:
+  - "docker-compose.yml"
+  - "docker-compose.mlnode.yml"
+
+# Ansible configuration
+ansible_timeout: 600
+docker_timeout: 3600
+model_download_timeout: 7200

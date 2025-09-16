@@ -1,0 +1,117 @@
+---
+# Gonka Two-Cluster Deployment Playbook
+# Deploys two independent clusters with model distribution
+
+- name: Phase 0 - Account Key Setup
+  hosts: cluster1_network_node
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - key-setup
+
+- name: Phase 1 - Environment Setup & Pre-Validation
+  hosts: gonka_clusters
+  gather_facts: true
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - firewall
+    - pre-validation
+
+- name: Phase 1.4 - Dependency Installation
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - dependencies
+
+- name: Phase 2 - Repository & Model Preparation
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - git
+    - huggingface
+    - docker
+
+- name: Phase 2.1 - Post-Repository Validation
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - repo-validation
+
+- name: Phase 3 - Key Management & Configuration
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - config
+
+- name: Phase 3.2 - Initial Services Launch (Network Nodes Only)
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - network-init
+
+- name: Phase 3.3 - Cryptographic Key Setup (Network Nodes Only)
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - keygen
+
+- name: Phase 3.4 - Host Registration (Network Nodes Only)
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - registration
+
+- name: Phase 3.5 - Permission Granting (Local Machine)
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - permissions
+
+- name: Phase 4 - Full Node Activation (Network Nodes Only)
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - network-full
+
+- name: Phase 5 - ML Nodes Deployment
+  hosts: cluster1_ml_nodes:cluster2_ml_nodes
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - ml-deploy
+
+- name: Phase 5.2 - ML Node Registration
+  hosts: cluster1_network_node:cluster2_network_node
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - ml-register
+
+- name: Phase 6 - Verification & Health Checks
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - validation
+    - cluster-check
+    - performance
+
+# - name: Phase 7 - Monitoring & Maintenance Setup
+#   hosts: gonka_clusters
+#   vars_files:
+#     - ../vars/main.yml
+#   roles:
+#     - logging
+#     - monitoring
+#     - backup

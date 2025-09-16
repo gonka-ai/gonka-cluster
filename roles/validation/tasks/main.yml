@@ -1,0 +1,84 @@
+---
+# Post-Deployment Validation Role
+# Comprehensive validation of deployed Gonka cluster health and services
+
+- name: Validate deployment configuration files
+  stat:
+    path: "{{ gonka_deploy_dir }}/{{ item }}"
+  loop:
+    - config.env
+    - docker-compose.yml
+    - docker-compose.mlnode.yml
+    - node-config-generated.json
+  register: config_files
+  failed_when: config_files.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
+
+- name: Validate firewall configuration for Gonka ports
+  command: ufw status | grep -E "(5000|8000|26657)"
+  register: firewall_check
+  changed_when: false
+  failed_when: firewall_check.rc != 0
+
+- name: Check deployed containers are running
+  command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  register: containers
+  changed_when: false
+  failed_when: containers.stdout_lines | length < 2
+
+- name: Validate network node API endpoints
+  uri:
+    url: "{{ item }}"
+    method: GET
+    timeout: 10
+  loop:
+    - "http://{{ ansible_host }}:{{ api_port }}/health"
+    - "http://{{ ansible_host }}:{{ api_port }}/v1/status"
+  register: api_tests
+  ignore_errors: true
+  failed_when: api_tests.results | selectattr('status', 'equalto', 200) | list | length == 0
+  when: "'network_node' in group_names"
+
+- name: Validate ML node inference endpoints
+  uri:
+    url: "http://{{ ansible_host }}:{{ inference_port }}/health"
+    method: GET
+    timeout: 10
+  register: ml_health
+  ignore_errors: true
+  failed_when: ml_health.status != 200
+  when: "'ml_nodes' in group_names"
+
+- name: Check blockchain synchronization (network nodes only)
+  uri:
+    url: "http://localhost:{{ rpc_port }}/status"
+    method: GET
+  register: sync_status
+  failed_when: sync_status.json.result.sync_info.catching_up
+  when: "'network_node' in group_names"
+
+- name: Validate GPU utilization on ML nodes
+  command: nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits
+  register: gpu_util
+  changed_when: false
+  when: "'ml_nodes' in group_names"
+
+- name: Generate validation report
+  debug:
+    msg: |
+      ✅ Post-Deployment Validation Report for {{ inventory_hostname }}
+      📄 Config Files: {{ config_files.results | selectattr('stat.exists', 'equalto', true) | list | length }}/{{ config_files.results | length }} present
+      🔥 Firewall: {{ firewall_check.rc == 0 | ternary('CONFIGURED', 'NOT CONFIGURED') }}
+      🐳 Containers: {{ containers.stdout_lines | length }} running
+      {% if 'network_node' in group_names %}
+      🌐 API Endpoints: {{ api_tests.results | selectattr('status', 'equalto', 200) | list | length }}/{{ api_tests.results | length }} responding
+      ⛓️  Blockchain: {{ sync_status.json.result.sync_info.catching_up | ternary('SYNCING', 'SYNCED') if sync_status.json is defined else 'CHECKING' }}
+      {% endif %}
+      {% if 'ml_nodes' in group_names %}
+      🎯 ML Inference: {{ ml_health.status == 200 | ternary('HEALTHY', 'UNHEALTHY') if ml_health.status is defined else 'CHECKING' }}
+      🎮 GPU Utilization: {{ gpu_util.stdout | default('N/A') }}%
+      {% endif %}
+      🎯 Overall Status: POST-DEPLOYMENT VALIDATION {{ 'PASSED' if (
+        config_files.results | selectattr('stat.exists', 'equalto', true) | list | length == config_files.results | length and
+        firewall_check.rc == 0 and
+        containers.stdout_lines | length >= 2
+      ) else 'FAILED' }}

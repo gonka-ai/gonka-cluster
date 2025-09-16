@@ -1,0 +1,36 @@
+---
+# Cryptographic Key Generation Role
+# Generate ML Operational Key inside API container
+
+- name: Generate ML Operational Key inside API container
+  shell: >
+    source {{ gonka_deploy_dir }}/config.env &&
+    docker compose run --rm --no-deps -T api /bin/sh -c '
+    printf "%s\n%s\n" "$KEYRING_PASSWORD" "$KEYRING_PASSWORD" |
+    inferenced keys add "$KEY_NAME" --keyring-backend file
+    '
+  args:
+    chdir: "{{ gonka_deploy_dir }}"
+  register: ml_key_creation
+  no_log: true
+
+- name: Secure backup of mnemonic
+  copy:
+    content: "{{ ml_key_creation.stdout }}"
+    dest: "{{ gonka_deploy_dir }}/ml-key-backup-{{ ansible_date_time.iso8601 }}.txt"
+    mode: '0600'
+  when: ml_key_creation.stdout is defined
+
+- name: Extract ML operational address from key creation output
+  set_fact:
+    ml_operational_address: "{{ ml_key_creation.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+  when: ml_key_creation.stdout is defined
+
+- name: Display key generation success
+  debug:
+    msg: |
+      ✅ ML Operational Key generated on {{ inventory_hostname }}
+      🔑 Key Name: {{ key_name }}
+      📍 Address: {{ ml_operational_address | default('NOT EXTRACTED') }}
+      💾 Backup: ml-key-backup-{{ ansible_date_time.iso8601 }}.txt
+      🚀 Ready for host registration

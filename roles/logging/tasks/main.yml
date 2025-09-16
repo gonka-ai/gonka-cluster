@@ -1,0 +1,60 @@
+---
+# Logging Configuration Role
+# Configure centralized logging for Gonka services
+
+- name: Create log directory
+  file:
+    path: "{{ gonka_deploy_dir }}/logs"
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+
+- name: Configure Docker logging driver
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+    mode: '0644'
+  notify: restart docker
+  become: true
+
+- name: Display logging configuration
+  debug:
+    msg: |
+      📝 Logging configured on {{ inventory_hostname }}
+      📁 Log Directory: {{ gonka_deploy_dir }}/logs
+      🔧 Docker Logging: JSON file driver
+      📊 Max Size: 10MB per file, 3 files max
+
+- name: Create log rotation configuration
+  copy:
+    dest: /etc/logrotate.d/gonka
+    content: |
+      {{ gonka_deploy_dir }}/logs/*.log {
+        daily
+        rotate 7
+        compress
+        missingok
+        notifempty
+        create 644 ubuntu ubuntu
+      }
+    mode: '0644'
+  become: true
+
+- name: Display log rotation setup
+  debug:
+    msg: "🔄 Log rotation configured for Gonka logs"
+
+- name: Configure systemd journal limits
+  lineinfile:
+    path: /etc/systemd/journald.conf
+    line: "SystemMaxUse=100M"
+  become: true
+  notify: restart systemd-journald

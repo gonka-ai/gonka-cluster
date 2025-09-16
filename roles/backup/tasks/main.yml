@@ -1,0 +1,96 @@
+---
+# Backup Configuration Role
+# Configure backup procedures for Gonka deployment
+
+- name: Create backup directory
+  file:
+    path: "{{ gonka_deploy_dir }}/backup"
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+
+- name: Create backup script
+  copy:
+    dest: "{{ gonka_deploy_dir }}/backup/backup.sh"
+    content: |
+      #!/bin/bash
+      echo "=== Gonka Backup ==="
+      echo "Timestamp: $(date)"
+
+      BACKUP_DIR="{{ gonka_deploy_dir }}/backup/$(date +%Y%m%d_%H%M%S)"
+      mkdir -p "$BACKUP_DIR"
+
+      echo "Backup Directory: $BACKUP_DIR"
+
+      # Backup configuration files
+      echo "Backing up configuration files..."
+      cp "{{ gonka_deploy_dir }}/config.env" "$BACKUP_DIR/" 2>/dev/null || echo "config.env not found"
+      cp "{{ gonka_deploy_dir }}/node-config-generated.json" "$BACKUP_DIR/" 2>/dev/null || echo "node-config-generated.json not found"
+
+      # Backup key files (if they exist locally)
+      echo "Backing up key files..."
+      cp -r "{{ gonka_deploy_dir }}/.inference" "$BACKUP_DIR/" 2>/dev/null || echo "No local keyring found"
+
+      # Backup Docker volumes (metadata only, not actual data)
+      echo "Backing up Docker volume information..."
+      docker volume ls | grep gonka > "$BACKUP_DIR/docker-volumes.txt" 2>/dev/null || echo "No Docker volumes found"
+
+      # Create backup manifest
+      echo "=== Backup Manifest ===" > "$BACKUP_DIR/manifest.txt"
+      echo "Backup Date: $(date)" >> "$BACKUP_DIR/manifest.txt"
+      echo "Server: $(hostname)" >> "$BACKUP_DIR/manifest.txt"
+      echo "Gonka Deploy Dir: {{ gonka_deploy_dir }}" >> "$BACKUP_DIR/manifest.txt"
+      ls -la "$BACKUP_DIR" >> "$BACKUP_DIR/manifest.txt"
+
+      echo "Backup Size: $(du -sh "$BACKUP_DIR" | cut -f1)" >> "$BACKUP_DIR/manifest.txt"
+
+      echo "=== Backup Complete ==="
+      echo "Backup Location: $BACKUP_DIR"
+      echo "Manifest: $BACKUP_DIR/manifest.txt"
+    mode: '0755'
+
+- name: Create cleanup script for old backups
+  copy:
+    dest: "{{ gonka_deploy_dir }}/backup/cleanup.sh"
+    content: |
+      #!/bin/bash
+      echo "=== Backup Cleanup ==="
+      echo "Removing backups older than 7 days..."
+
+      find "{{ gonka_deploy_dir }}/backup" -type d -mtime +7 -name "20*" -exec rm -rf {} \; 2>/dev/null || echo "No old backups found"
+
+      echo "Cleanup complete. Kept backups from last 7 days."
+    mode: '0755'
+
+- name: Create backup cron job (weekly)
+  cron:
+    name: "gonka-weekly-backup"
+    minute: "0"
+    hour: "2"
+    weekday: "0"  # Sunday
+    job: "{{ gonka_deploy_dir }}/backup/backup.sh >> {{ gonka_deploy_dir }}/logs/backup.log 2>&1"
+    user: ubuntu
+
+- name: Create cleanup cron job (monthly)
+  cron:
+    name: "gonka-backup-cleanup"
+    minute: "0"
+    hour: "3"
+    day: "1"  # First day of month
+    job: "{{ gonka_deploy_dir }}/backup/cleanup.sh >> {{ gonka_deploy_dir }}/logs/backup-cleanup.log 2>&1"
+    user: ubuntu
+
+- name: Run initial backup
+  command: "{{ gonka_deploy_dir }}/backup/backup.sh"
+  register: initial_backup
+  changed_when: false
+
+- name: Display backup setup
+  debug:
+    msg: |
+      💾 Backup system configured on {{ inventory_hostname }}
+      📁 Backup Directory: {{ gonka_deploy_dir }}/backup
+      📅 Weekly Backup: Sunday at 2:00 AM
+      🧹 Monthly Cleanup: 1st of month at 3:00 AM
+      📝 Initial Backup: {{ initial_backup.stdout_lines[-1] | default('Completed') }}

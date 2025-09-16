@@ -1,0 +1,44 @@
+---
+# Permission Granting Role
+# Grant ML operation permissions to operational key
+
+- name: Determine cluster name
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+
+- name: Get ML operational address
+  set_fact:
+    ml_operational_address: "{{ hostvars[inventory_hostname]['ml_operational_address'] }}"
+  when: hostvars[inventory_hostname]['ml_operational_address'] is defined
+
+- name: Grant ML operation permissions using cluster-specific account key
+  shell: >
+    ./inferenced tx inference grant-ml-ops-permissions
+    {{ cluster_name }}-account-key
+    {{ ml_operational_address }}
+    --from {{ cluster_name }}-account-key
+    --keyring-backend file
+    --home ./gonka-keys-{{ cluster_name }}
+    --gas 2000000
+    --node http://node2.gonka.ai:8000/chain-rpc/
+  args:
+    chdir: .  # Current directory where Ansible script is run
+  register: permission_grant
+  failed_when: "'error' in permission_grant.stderr or 'Transaction confirmed successfully' not in permission_grant.stdout"
+  when: ml_operational_address is defined
+
+- name: Log permission transaction confirmation
+  debug:
+    msg: |
+      ✅ Permission transaction completed successfully on {{ inventory_hostname }}!
+      Transaction hash: {{ permission_grant.stdout | regex_findall('hash:\\s*([a-f0-9]+)') | first }}
+      Block height: {{ permission_grant.stdout | regex_findall('Block height:\\s*(\\d+)') | first }}
+      🔑 Account Key: {{ cluster_name }}-account-key
+      📍 ML Address: {{ ml_operational_address }}
+  when: "'Transaction confirmed successfully' in permission_grant.stdout"
+
+- name: Display permission granting completion
+  debug:
+    msg: |
+      🎉 All permissions granted on {{ inventory_hostname }}
+      🚀 Ready for full node activation

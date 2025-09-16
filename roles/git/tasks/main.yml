@@ -1,0 +1,60 @@
+---
+# Git Repository Cloning Role
+# Clone Gonka deployment repository
+
+- name: Create repository directory
+  file:
+    path: "{{ gonka_repo_dir }}"
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+  become: true
+
+- name: Clone Gonka repository
+  git:
+    repo: https://github.com/gonka-ai/gonka
+    dest: "{{ gonka_repo_dir }}"
+    version: main
+    depth: 1
+    force: true
+  become: true
+
+- name: Set correct permissions on repository
+  file:
+    path: "{{ gonka_repo_dir }}"
+    owner: ubuntu
+    group: ubuntu
+    recurse: true
+  become: true
+
+- name: Verify deploy/join directory exists
+  stat:
+    path: "{{ gonka_repo_dir }}/deploy/join"
+  register: deploy_join_dir
+  failed_when: not deploy_join_dir.stat.exists
+
+- name: Verify repository contents
+  command: ls -la {{ gonka_repo_dir }}/deploy/join
+  register: repo_contents
+  changed_when: false
+
+- name: Check for required compose files
+  stat:
+    path: "{{ gonka_deploy_dir }}/{{ item }}"
+  loop:
+    - docker-compose.yml
+    - docker-compose.mlnode.yml
+  register: compose_files
+  failed_when: "not item.stat.exists"
+
+- name: Display repository cloning success
+  debug:
+    msg: |
+      ✅ Repository cloned successfully on {{ inventory_hostname }}
+      📁 Repository: {{ gonka_repo_dir }}
+      📁 Deploy Directory: {{ gonka_repo_dir }}/deploy/
+      📁 Working Directory: {{ gonka_deploy_dir }} (deploy/join/)
+      📄 Compose files: Present
+      🔄 Repository updates: Available via git pull
+      🔧 Ready for Docker deployment

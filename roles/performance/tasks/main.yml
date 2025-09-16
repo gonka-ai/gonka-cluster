@@ -1,0 +1,27 @@
+---
+# Performance Monitoring Role
+# Monitor system performance and resource utilization
+
+- name: Check system resources
+  command: free -h
+  register: memory_info
+  changed_when: false
+
+- name: Check disk usage
+  command: df -h {{ gonka_deploy_dir }}
+  register: disk_usage
+  changed_when: false
+
+- name: Check Docker disk usage
+  command: docker system df
+  register: docker_usage
+  changed_when: false
+
+- name: Display performance metrics
+  debug:
+    msg: |
+      📊 Performance Report for {{ inventory_hostname }}
+      🧠 Memory: {{ memory_info.stdout_lines[1] }}
+      💾 Disk Usage: {{ disk_usage.stdout_lines[1] }}
+      🐳 Docker Usage: {{ docker_usage.stdout_lines[2:] | join('\n      ') }}
+      ✅ Resource monitoring completed

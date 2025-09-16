@@ -1,0 +1,31 @@
+---
+# Phase 0: Account Key Setup
+# Extract and validate cluster-specific account keys
+
+- name: Determine cluster name
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+
+- name: Extract cluster account public key
+  command: >
+    ./inferenced keys show gonka-account-key-{{ cluster_name }}
+    --keyring-backend file
+    --home ./gonka-keys-{{ cluster_name }}
+  register: account_key_info
+  failed_when: "'gonka1' not in account_key_info.stdout"
+
+- name: Store cluster account public key
+  set_fact:
+    "{{ cluster_name }}_account_pubkey": "{{ account_key_info.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+
+- name: Validate account key format
+  assert:
+    that: "{{ cluster_name }}_account_pubkey is defined and {{ cluster_name }}_account_pubkey | regex_match('^gonka1[a-z0-9]{38}$')"
+    fail_msg: "Invalid {{ cluster_name }} account key format: {{ {{ cluster_name }}_account_pubkey }}"
+
+- name: Display key extraction success
+  debug:
+    msg: |
+      ✅ {{ cluster_name | upper }} Account Key Extracted Successfully:
+      🔑 Public Key: {{ {{ cluster_name }}_account_pubkey }}
+      📁 Keyring: ./gonka-keys-{{ cluster_name }}

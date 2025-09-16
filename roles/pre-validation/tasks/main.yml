@@ -1,0 +1,83 @@
+---
+# Pre-Validation Role
+# System prerequisites validation BEFORE deployment starts
+
+- name: Validate basic system requirements
+  assert:
+    that:
+      - ansible_distribution == "Ubuntu"
+      - ansible_distribution_version == "22.04"
+    fail_msg: "Server must run Ubuntu 22.04.5"
+  when: ansible_distribution is defined
+
+- name: Check Docker service status
+  service:
+    name: docker
+    state: started
+  register: docker_service
+  failed_when: not docker_service.changed
+
+- name: Validate Docker version
+  command: docker --version
+  register: docker_version
+  changed_when: false
+  failed_when: "'28.4.0' not in docker_version.stdout"
+
+- name: Check NVIDIA GPU availability
+  command: nvidia-smi --query-gpu=name --format=csv,noheader,nounits
+  register: gpu_check
+  changed_when: false
+  when: "'ml_nodes' in group_names"
+  failed_when: "'ml_nodes' in group_names and gpu_check.stdout_lines | length < 8"
+
+- name: Validate minimum disk space available
+  stat:
+    path: "/"
+  register: root_fs
+  failed_when: root_fs.stat.size_available / 1024 / 1024 / 1024 < 100
+
+- name: Validate network connectivity to external services
+  uri:
+    url: "{{ item }}"
+    method: HEAD
+    timeout: 10
+  loop:
+    - "https://github.com"
+    - "https://huggingface.co"
+    - "http://node2.gonka.ai:8000"
+  register: network_tests
+  ignore_errors: true
+  failed_when: network_tests.results | selectattr('status', 'equalto', 200) | list | length == 0
+
+- name: Validate SSH connectivity between servers
+  command: ping -c 3 {{ item }}
+  loop: "{{ groups['gonka_clusters'] | difference([inventory_hostname]) }}"
+  register: connectivity_tests
+  ignore_errors: true
+  failed_when: connectivity_tests.results | selectattr('rc', 'equalto', 0) | list | length == 0
+
+- name: Validate firewall is installed and running
+  service:
+    name: ufw
+    state: started
+  register: firewall_service
+  failed_when: not firewall_service.changed
+
+- name: Generate pre-validation report
+  debug:
+    msg: |
+      ✅ Pre-Validation Report for {{ inventory_hostname }}
+      🖥️  OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      🐳 Docker: {{ docker_version.stdout | default('OK') }}
+      💾 Disk Space: {{ (root_fs.stat.size_available / 1024 / 1024 / 1024) | round(1) }}GB available
+      🌐 Network: {{ network_tests.results | selectattr('status', 'equalto', 200) | list | length }}/{{ network_tests.results | length }} endpoints reachable
+      🔗 SSH Connectivity: {{ connectivity_tests.results | selectattr('rc', 'equalto', 0) | list | length }}/{{ connectivity_tests.results | length }} servers reachable
+      🔥 Firewall: {{ firewall_service.changed | ternary('RUNNING', 'NOT RUNNING') }}
+      {% if 'ml_nodes' in group_names %}
+      🎮 GPUs: {{ gpu_check.stdout_lines | length if gpu_check.stdout is defined else 0 }} detected
+      {% endif %}
+      🎯 Overall Status: PRE-VALIDATION {{ 'PASSED' if (
+        docker_service.changed and
+        (root_fs.stat.size_available / 1024 / 1024 / 1024) >= 100 and
+        firewall_service.changed
+      ) else 'FAILED' }}

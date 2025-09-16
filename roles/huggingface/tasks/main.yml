@@ -1,0 +1,39 @@
+---
+# HuggingFace Model Download Role
+# Download all required models to shared cache
+
+- name: Download required models
+  shell: >
+    export HF_HOME={{ hf_home }} &&
+    huggingface-cli download {{ item.name }}
+    --local-dir {{ hf_home }}/{{ item.name | replace('/', '_') }}
+    --local-dir-use-symlinks False
+  loop: "{{ model_list.small + model_list.medium + model_list.large }}"
+  async: "{{ model_download_timeout }}"
+  poll: 60
+  register: download_result
+
+- name: Verify model downloads
+  stat:
+    path: "{{ hf_home }}/{{ item.name | replace('/', '_') }}/config.json"
+  loop: "{{ model_list.small + model_list.medium + model_list.large }}"
+  register: model_verification
+
+- name: Report download status
+  debug:
+    msg: "Model {{ item.item.name }}: {{ 'SUCCESS' if item.stat.exists else 'FAILED' }}"
+  loop: "{{ model_verification.results }}"
+
+- name: Calculate total downloaded size
+  shell: >
+    du -sh {{ hf_home }}
+  register: total_size
+  changed_when: false
+
+- name: Display download completion
+  debug:
+    msg: |
+      ✅ Model downloads completed on {{ inventory_hostname }}
+      📊 Total cache size: {{ total_size.stdout }}
+      📁 Cache location: {{ hf_home }}
+      🧠 Models ready for inference

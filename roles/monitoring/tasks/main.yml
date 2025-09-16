@@ -1,0 +1,84 @@
+---
+# Monitoring Configuration Role
+# Configure basic monitoring for Gonka services
+
+- name: Create monitoring scripts directory
+  file:
+    path: "{{ gonka_deploy_dir }}/monitoring"
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+
+- name: Create health check script
+  copy:
+    dest: "{{ gonka_deploy_dir }}/monitoring/health-check.sh"
+    content: |
+      #!/bin/bash
+      echo "=== Gonka Health Check ==="
+      echo "Timestamp: $(date)"
+
+      # Check Docker containers
+      echo "Docker Containers:"
+      docker ps --format "table {{.Names}}\t{{.Status}}" || echo "No containers running"
+
+      # Check system resources
+      echo "System Resources:"
+      echo "CPU Usage: $(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1"%"}')"
+      echo "Memory Usage: $(free | grep Mem | awk '{printf "%.2f%%", $3/$2 * 100.0}')"
+
+      # GPU check (if available)
+      if command -v nvidia-smi &> /dev/null; then
+        echo "GPU Status:"
+        nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits || echo "GPU check failed"
+      fi
+
+      echo "=== End Health Check ==="
+    mode: '0755'
+
+- name: Create monitoring cron job
+  cron:
+    name: "gonka-health-check"
+    minute: "*/5"
+    job: "{{ gonka_deploy_dir }}/monitoring/health-check.sh >> {{ gonka_deploy_dir }}/logs/health-check.log 2>&1"
+    user: ubuntu
+
+- name: Create resource monitoring script
+  copy:
+    dest: "{{ gonka_deploy_dir }}/monitoring/resource-monitor.sh"
+    content: |
+      #!/bin/bash
+      echo "=== Resource Monitor ==="
+      echo "Timestamp: $(date)"
+
+      # Disk usage
+      echo "Disk Usage:"
+      df -h {{ gonka_deploy_dir }} || echo "Disk check failed"
+
+      # Network connectivity
+      echo "Network Connectivity:"
+      ping -c 1 8.8.8.8 &>/dev/null && echo "Internet: OK" || echo "Internet: FAILED"
+      ping -c 1 {{ seed_api_url | regex_replace('http://', '') | regex_replace(':.*', '') }} &>/dev/null && echo "Seed Node: OK" || echo "Seed Node: FAILED"
+
+      # Service status
+      echo "Service Status:"
+      systemctl is-active docker && echo "Docker: RUNNING" || echo "Docker: STOPPED"
+
+      echo "=== End Resource Monitor ==="
+    mode: '0755'
+
+- name: Create resource monitoring cron job
+  cron:
+    name: "gonka-resource-monitor"
+    minute: "*/15"
+    job: "{{ gonka_deploy_dir }}/monitoring/resource-monitor.sh >> {{ gonka_deploy_dir }}/logs/resource-monitor.log 2>&1"
+    user: ubuntu
+
+- name: Display monitoring setup
+  debug:
+    msg: |
+      📊 Monitoring configured on {{ inventory_hostname }}
+      📁 Scripts Directory: {{ gonka_deploy_dir }}/monitoring
+      🔄 Health Check: Every 5 minutes
+      📈 Resource Monitor: Every 15 minutes
+      📝 Logs: {{ gonka_deploy_dir }}/logs/

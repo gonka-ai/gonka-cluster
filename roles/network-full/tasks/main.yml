@@ -1,0 +1,46 @@
+---
+# Full Network Activation Role
+# Launch complete network node with all services
+
+- name: Launch complete Docker Compose stack
+  shell: >
+    source {{ gonka_deploy_dir }}/config.env &&
+    docker compose -f docker-compose.yml -f docker-compose.mlnode.yml up -d
+  args:
+    chdir: "{{ gonka_deploy_dir }}"
+  register: full_activation
+
+- name: Wait for API service to be ready
+  uri:
+    url: "http://{{ ansible_host }}:{{ api_port }}/health"
+    method: GET
+  register: api_health
+  until: api_health.status == 200
+  retries: 30
+  delay: 10
+
+- name: Wait for services to be ready
+  command: docker compose -f docker-compose.yml -f docker-compose.mlnode.yml ps
+  args:
+    chdir: "{{ gonka_deploy_dir }}"
+  register: container_status
+  changed_when: false
+
+- name: Test API endpoints availability
+  uri:
+    url: "{{ item }}"
+    method: GET
+  loop:
+    - "http://{{ ansible_host }}:{{ api_port }}/v1/status"
+    - "http://{{ ansible_host }}:{{ api_port }}/v1/participants"
+  register: api_tests
+  failed_when: item.status != 200
+
+- name: Display full activation success
+  debug:
+    msg: |
+      🎉 Full network activation completed on {{ inventory_hostname }}!
+      🌐 API available at: http://{{ ansible_host }}:{{ api_port }}
+      🔗 Blockchain RPC at: http://{{ ansible_host }}:{{ rpc_port }}
+      📊 Container status: {{ container_status.stdout_lines | length }} containers running
+      🚀 Network node fully operational!

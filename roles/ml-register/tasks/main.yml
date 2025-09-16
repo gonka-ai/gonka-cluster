@@ -1,0 +1,47 @@
+---
+# ML Node Registration Role
+# Register ALL ML nodes with the network node via local Admin API
+# This role runs on the NETWORK NODE and registers all ML nodes in the cluster
+
+- name: Determine cluster name
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+  when: "'network_node' in group_names"
+
+# Register all ML nodes in the cluster (loop through them)
+- name: Register all ML nodes with network node (local Admin API access)
+  uri:
+    url: "http://localhost:9200/admin/v1/nodes"  # Local access only
+    method: POST
+    body_format: json
+    body:
+      id: "{{ cluster_name }}-ml-{{ loop_index }}"
+      host: "{{ item }}"
+      inference_port: "{{ inference_port }}"
+      poc_port: "{{ management_port }}"
+      max_concurrent: 500
+      models: "{{ model_configs[assigned_model] if assigned_model in model_configs else {} }}"
+    vars:
+      assigned_model: "{{ cluster_models[cluster_name].ml_node_models[loop_index % cluster_models[cluster_name].ml_node_models | length].model }}"
+  loop: "{{ groups[cluster_name + '_ml_nodes'] }}"
+  register: registration_result
+  failed_when: item.status != 200
+  when: "'network_node' in group_names"
+
+- name: Verify all ML nodes are registered (local Admin API access)
+  uri:
+    url: "http://localhost:9200/admin/v1/nodes"  # Local access only
+    method: GET
+  register: registered_nodes
+  failed_when: "registered_nodes.json | length < groups[cluster_name + '_ml_nodes'] | length"
+  when: "'network_node' in group_names"
+
+- name: Display ML node registration success
+  debug:
+    msg: |
+      ✅ All ML Nodes registered successfully from Network Node!
+      📋 Cluster: {{ cluster_name }}
+      🔗 Network Node: {{ inventory_hostname }}
+      📊 Total registered: {{ registered_nodes.json | length }}
+      🎯 ML Nodes: {{ groups[cluster_name + '_ml_nodes'] | join(', ') }}
+  when: "'network_node' in group_names"

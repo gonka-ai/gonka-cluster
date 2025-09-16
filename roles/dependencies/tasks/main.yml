@@ -1,0 +1,76 @@
+---
+# Dependencies Installation Role
+# Install required system packages and Python modules
+
+- name: Update package cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  become: true
+
+- name: Install system packages
+  apt:
+    name:
+      - python3-pip
+      - python3-dev
+      - git
+      - curl
+      - wget
+      - build-essential
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+  become: true
+
+- name: Install Python packages
+  pip:
+    name:
+      - huggingface_hub
+      - transformers
+      - torch
+      - torchvision
+      - numpy
+    state: present
+
+- name: Create Hugging Face cache directory
+  file:
+    path: "{{ hf_home }}"
+    state: directory
+    mode: '0755'
+    owner: ubuntu
+    group: ubuntu
+  become: true
+
+- name: Set HF_HOME environment variable globally
+  lineinfile:
+    path: /etc/environment
+    line: "HF_HOME={{ hf_home }}"
+  become: true
+
+- name: Set HF_HOME in user profile
+  lineinfile:
+    path: /home/ubuntu/.bashrc
+    line: "export HF_HOME={{ hf_home }}"
+    create: true
+
+- name: Set HF_HOME in root profile
+  lineinfile:
+    path: /root/.bashrc
+    line: "export HF_HOME={{ hf_home }}"
+    create: true
+
+- name: Verify HF_HOME environment variable
+  shell: echo "HF_HOME=$HF_HOME"
+  register: hf_home_check
+  failed_when: "'{{ hf_home }}' not in hf_home_check.stdout"
+
+- name: Display installation completion
+  debug:
+    msg: |
+      ✅ Dependencies installed on {{ inventory_hostname }}
+      📦 Python packages: huggingface_hub, transformers, torch
+      📁 HF_HOME: {{ hf_home }}
+      🔧 Environment: Configured

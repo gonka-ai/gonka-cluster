@@ -1,0 +1,67 @@
+---
+# Cluster Health Check Role
+# Validate deployment status and cluster health
+
+- name: Check Docker containers status
+  command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  register: container_status
+  changed_when: false
+
+- name: Display container status
+  debug:
+    msg: "{{ container_status.stdout_lines }}"
+
+- name: Check GPU utilization (ML nodes only)
+  command: nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits
+  register: gpu_status
+  changed_when: false
+  when: "'ml_nodes' in group_names"
+
+- name: Display GPU status
+  debug:
+    msg: "{{ gpu_status.stdout_lines }}"
+  when: "'ml_nodes' in group_names and gpu_status.stdout is defined"
+
+- name: Validate network node services
+  uri:
+    url: "{{ item }}"
+    method: GET
+  loop:
+    - "http://{{ ansible_host }}:{{ api_port }}/v1/status"
+    - "http://{{ ansible_host }}:{{ rpc_port }}/status"
+  register: network_checks
+  failed_when: item.status != 200
+  when: "'network_node' in group_names"
+
+- name: Validate ML node services
+  uri:
+    url: "http://{{ ansible_host }}:{{ inference_port }}/health"
+    method: GET
+  register: ml_health
+  failed_when: ml_health.status != 200
+  when: "'ml_nodes' in group_names"
+
+- name: Check model files presence
+  stat:
+    path: "{{ hf_home }}/Qwen"
+  register: model_files
+  when: "'ml_nodes' in group_names"
+
+- name: Generate health report
+  debug:
+    msg: |
+      🔍 Health Check Report for {{ inventory_hostname }}
+      🐳 Containers: {{ container_status.stdout_lines | length }}
+      {% if 'network_node' in group_names %}
+      🌐 Network API: {{ network_checks.results[0].status == 200 | ternary('HEALTHY', 'UNHEALTHY') }}
+      🔗 Blockchain RPC: {{ network_checks.results[1].status == 200 | ternary('HEALTHY', 'UNHEALTHY') }}
+      {% endif %}
+      {% if 'ml_nodes' in group_names %}
+      🚀 ML Inference: {{ ml_health.status == 200 | ternary('HEALTHY', 'UNHEALTHY') }}
+      🧠 Models: {{ model_files.stat.exists | ternary('PRESENT', 'MISSING') }}
+      🎮 GPU: {{ gpu_status.stdout_lines | length if gpu_status.stdout is defined else 0 }} GPUs detected
+      {% endif %}
+      ✅ Overall Status: {{ 'HEALTHY' if (
+        ('network_node' in group_names and network_checks.results[0].status == 200 and network_checks.results[1].status == 200) or
+        ('ml_nodes' in group_names and ml_health.status == 200)
+      ) else 'NEEDS ATTENTION' }}

@@ -1,0 +1,67 @@
+---
+# Firewall Configuration Role
+# Configure UFW firewall rules for Gonka services
+
+- name: Enable UFW firewall
+  ufw:
+    state: enabled
+  become: true
+
+- name: Allow SSH access
+  ufw:
+    rule: allow
+    port: 22
+    proto: tcp
+  become: true
+
+- name: Allow HTTP/HTTPS access
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - 80
+    - 443
+  become: true
+
+# Network node specific ports (EXCEPT Admin API)
+- name: Allow network node public ports
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "{{ api_port }}"      # API service (public)
+    - "{{ rpc_port }}"      # Tendermint RPC (public)
+    - "{{ p2p_port }}"      # P2P communication (public)
+    # NOTE: Admin API (port 9200) is NOT exposed publicly for security
+    # Access via SSH tunneling: ssh -L 9200:localhost:9200 user@server
+  when: "'network_node' in group_names"
+  become: true
+
+# ML node specific ports
+- name: Allow ML node ports
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "{{ inference_port }}"    # Inference requests
+    - "{{ management_port }}"   # Management API
+  when: "'ml_nodes' in group_names"
+  become: true
+
+- name: Reload firewall rules
+  ufw:
+    state: reloaded
+  become: true
+
+- name: Display firewall status
+  command: ufw status
+  register: firewall_status
+  changed_when: false
+  become: true
+
+- name: Show firewall configuration
+  debug:
+    msg: "{{ firewall_status.stdout_lines }}"
