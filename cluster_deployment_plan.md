@@ -177,28 +177,28 @@ This deployment uses **Ansible** for orchestration, providing:
   register: cluster2_key_info
   when: inventory_hostname == groups['cluster2_network_node'][0]
 
-# Store cluster-specific public keys
-- name: Set cluster1 account public key
+# Store cluster-specific pubkey key values
+- name: Set cluster1 account pubkey
   set_fact:
-    cluster1_account_pubkey: "{{ cluster1_key_info.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+    cluster1_account_pubkey: "{{ cluster1_key_info.stdout | regex_findall('\"key\":\"([^\"]+)\"') | first }}"
   when: inventory_hostname == groups['cluster1_network_node'][0]
 
-- name: Set cluster2 account public key
+- name: Set cluster2 account pubkey
   set_fact:
-    cluster2_account_pubkey: "{{ cluster2_key_info.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+    cluster2_account_pubkey: "{{ cluster2_key_info.stdout | regex_findall('\"key\":\"([^\"]+)\"') | first }}"
   when: inventory_hostname == groups['cluster2_network_node'][0]
 
-# Validate keys are properly extracted
-- name: Validate cluster1 key format
+# Validate pubkey key values are properly extracted
+- name: Validate cluster1 pubkey format
   assert:
-    that: cluster1_account_pubkey | regex_match('^gonka1[a-z0-9]{38}$')
-    fail_msg: "Invalid cluster1 account key format"
+    that: cluster1_account_pubkey is defined and cluster1_account_pubkey | length > 10
+    fail_msg: "Invalid cluster1 account pubkey format"
   when: inventory_hostname == groups['cluster1_network_node'][0]
 
-- name: Validate cluster2 key format
+- name: Validate cluster2 pubkey format
   assert:
-    that: cluster2_account_pubkey | regex_match('^gonka1[a-z0-9]{38}$')
-    fail_msg: "Invalid cluster2 account key format"
+    that: cluster2_account_pubkey is defined and cluster2_account_pubkey | length > 10
+    fail_msg: "Invalid cluster2 account pubkey format"
   when: inventory_hostname == groups['cluster2_network_node'][0]
 ```
 
@@ -599,10 +599,10 @@ model_configs:
   register: public_key_info
   when: inventory_hostname == groups['network_node'][0]
 
-# Store public key for config generation
-- name: Set fact for account public key
+# Store pubkey key value for config generation
+- name: Set fact for account pubkey
   set_fact:
-    account_pubkey: "{{ public_key_info.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+    account_pubkey: "{{ public_key_info.stdout | regex_findall('\"key\":\"([^\"]+)\"') | first }}"
   when: inventory_hostname == groups['network_node'][0]
 ```
 
@@ -676,7 +676,7 @@ export KEYRING_BACKEND=file
 export PUBLIC_URL=http://{{ network_node_ip }}:8000
 export P2P_EXTERNAL_ADDRESS=tcp://{{ network_node_ip }}:5000
 
-# Account Key Configuration (from Gonka docs)
+# Account PubKey Configuration (from Gonka docs - base64 key value)
 export ACCOUNT_PUBKEY={{ account_pubkey | default('PLACEHOLDER_PUBKEY') }}
 
 # Model Cache Configuration (from Gonka docs)
@@ -707,7 +707,7 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
 ```
 
 **How config.env.j2 Works:**
-1. **Template Variables**: `{{ network_node_ip }}`, `{{ account_pubkey }}`, `{{ keyring_password }}` get replaced by Ansible
+1. **Template Variables**: `{{ network_node_ip }}`, `{{ account_pubkey }}` (base64 key value), `{{ keyring_password }}` get replaced by Ansible
 2. **Matches Gonka Docs**: Follows exact format from [Gonka documentation](https://gonka.ai/host/quickstart/#server-edit-your-network-node-configuration)
 3. **Dynamic Configuration**: IP address and public key are dynamically inserted
 4. **Ansible Template**: Uses Jinja2 templating engine for variable substitution
