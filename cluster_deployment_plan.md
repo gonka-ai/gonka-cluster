@@ -512,10 +512,21 @@ model_configs:
 #### 2.3 Docker Environment Preparation (docker role)
 - **Docker Group Setup**: Create docker group and add ubuntu user (allows sudo-less Docker usage)
 - **Group Membership**: Configure user permissions for seamless Docker operations
+- **Firewall Integration**: Configure Docker to respect UFW rules (prevents Docker from bypassing firewall)
+- **Performance Optimization**: Disable userland-proxy for direct iptables routing (optimal for ML workloads)
+- **Inter-Container Communication**: Allow containers to communicate (required for distributed ML operations)
+- **Docker Daemon Config**: Disable Docker's iptables management to avoid rule conflicts
+- **UFW Before Rules**: Create Docker-specific UFW rules for proper container traffic filtering
 - **Docker compose pull**: Pull all images from compose files on ALL servers
 - **NVIDIA runtime**: GPU compatibility verification on all servers
 - **Compose validation**: Verify configuration files on all servers
 - **Image management**: Cleanup and optimization tasks
+
+**Critical Security Feature**: Docker is configured to NOT bypass UFW firewall rules, ensuring that:
+- ML node ports remain restricted to network node access only
+- DAPI/gRPC ports maintain their IP-based access controls
+- Inter-container communication is allowed (required for distributed ML operations)
+- No unauthorized access to container services
 
 **Docker Images via Docker Compose:**
 ```yaml

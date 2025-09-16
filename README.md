@@ -163,6 +163,17 @@ ssh-copy-id -i ~/.ssh/gonka-deploy-key ubuntu@YOUR_SERVER_IP
 private_key_file = ~/.ssh/your-key-file
 ```
 
+### Docker-Firewall Integration
+The deployment automatically configures Docker to respect UFW firewall rules:
+- **Docker Group Setup**: Creates docker group and adds ubuntu user for sudo-less Docker usage
+- **Firewall Integration**: Disables Docker's default iptables management to prevent rule conflicts
+- **Performance Optimization**: Disables userland-proxy for direct iptables routing (better for ML workloads)
+- **Inter-Container Communication**: Allows containers to communicate with each other (required for distributed ML)
+- **Security Enforcement**: Ensures UFW rules apply to all Docker container ports
+- **Network Isolation**: Maintains proper security isolation between clusters and services
+
+**Important**: This configuration ensures that your carefully crafted firewall rules (restricting ML node ports to network node access only) actually work as intended, preventing Docker from bypassing UFW.
+
 ## 🎯 Deployment Phases
 
 ### Phase 0: Account Key Setup

@@ -1,0 +1,13 @@
+---
+# Docker Handlers
+
+- name: restart docker
+  service:
+    name: docker
+    state: restarted
+  become: true
+
+- name: reload ufw
+  ufw:
+    state: reloaded
+  become: true

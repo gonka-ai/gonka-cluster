@@ -15,6 +15,34 @@
     append: yes
   become: true
 
+- name: Configure Docker to respect UFW rules
+  copy:
+    content: |
+      {
+        "iptables": false,
+        "userland-proxy": false,
+        "bridge": "none"
+      }
+    dest: /etc/docker/daemon.json
+    mode: '0644'
+  become: true
+  notify: restart docker
+
+- name: Create UFW before rules for Docker
+  template:
+    src: docker-ufw-before-rules.j2
+    dest: /etc/ufw/before.rules
+    mode: '0640'
+  become: true
+  notify: reload ufw
+
+- name: Enable UFW Docker integration
+  lineinfile:
+    path: /etc/default/ufw
+    line: "IPTABLES_DIR=\"/etc/ufw\""
+    create: true
+  become: true
+
 - name: Refresh user groups (apply docker group membership)
   command: newgrp docker
   become: true
