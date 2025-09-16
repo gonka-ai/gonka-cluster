@@ -8,7 +8,40 @@ This repository contains Ansible scripts for deploying two independent Gonka Net
 
 **Note:** The `inferenced` CLI binary should be placed in the same directory as the Ansible deployment scripts. The deployment will run CLI commands from the current working directory.
 
-1. **Set Keyring Password Environment Variable**:
+### Local Environment Setup
+
+1. **Clone the Repository:**
+```bash
+# Replace 'your-org' with your actual GitHub organization/username
+git clone https://github.com/your-org/gonka-cluster.git
+cd gonka-cluster
+```
+
+2. **Download and Setup Inferenced CLI:**
+```bash
+# Download the inferenced binary for your platform
+# For macOS ARM64 (M1/M2):
+curl -L -o inferenced.zip https://github.com/gonka-ai/gonka/releases/download/release%2Fv0.2.0/inferenced-darwin-arm64.zip
+
+# Note: macOS may block execution initially - see verification step below
+
+# For Linux x86_64:
+# curl -L -o inferenced.zip https://github.com/gonka-ai/gonka/releases/download/release%2Fv0.2.0/inferenced-linux-amd64.zip
+
+# Extract and setup
+unzip inferenced.zip
+chmod +x inferenced
+
+# Verify installation
+./inferenced --help
+
+# ⚠️ MacOS Users: If you see a security warning, allow execution:
+# Go to System Settings → Privacy & Security
+# Scroll down to find the warning about "inferenced" being blocked
+# Click "Allow Anyway" to enable execution
+```
+
+3. **Set Environment Variable:**
 ```bash
 # Set the password that will be used for all key operations
 export GONKA_KEYRING_PASSWORD="your-secure-password-here"
@@ -16,7 +49,7 @@ export GONKA_KEYRING_PASSWORD="your-secure-password-here"
 # Keep this variable set for the entire deployment process
 ```
 
-2. **Generate Account Keys** (run locally with the environment variable set):
+4. **Generate Account Keys** (run locally with the environment variable set):
 ```bash
 # Generate account key for Cluster 1
 ./inferenced keys add gonka-account-key-cluster1 --keyring-backend file --home ./gonka-keys-cluster1
@@ -25,9 +58,9 @@ export GONKA_KEYRING_PASSWORD="your-secure-password-here"
 ./inferenced keys add gonka-account-key-cluster2 --keyring-backend file --home ./gonka-keys-cluster2
 ```
 
-3. **Update Inventory** - Replace placeholder IPs in `inventory.ini` with your actual server IPs
+5. **Update Inventory** - Replace placeholder IPs in `inventory.ini` with your actual server IPs
 
-4. **Install Ansible** on your deployment machine:
+6. **Install Ansible** on your deployment machine:
 ```bash
 pip install ansible
 ansible-galaxy collection install community.docker ansible.posix
@@ -101,14 +134,6 @@ gonka-cluster/
 ```
 
 ## ⚙️ Configuration
-
-### Docker Group Setup
-The deployment automatically configures Docker group permissions:
-- Creates `docker` group if it doesn't exist
-- Adds `ubuntu` user to the docker group
-- Refreshes group membership for immediate sudo-less Docker usage
-
-This ensures all Docker commands can run without requiring `sudo`.
 
 ### Update Server IPs
 
