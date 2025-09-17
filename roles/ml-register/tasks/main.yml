@@ -42,10 +42,10 @@
     registration_payload:
       id: "{{ ml_host }}"
       host: "{{ hostvars[ml_host]['ansible_host'] }}"
-      inference_port: "{{ inference_port | int }}"
-      poc_port: "{{ management_port | int }}"
+      inference_port: {{ inference_port | int }}
+      poc_port: {{ management_port | int }}
       max_concurrent: 500
-      models: "{{ models_dict }}"
+      models: {{ models_dict }}
   uri:
     url: "http://localhost:9200/admin/v1/nodes"  # Local access only
     method: POST
