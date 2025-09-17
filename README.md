@@ -12,8 +12,8 @@ This repository contains Ansible scripts for deploying two independent Gonka Net
 
 1. **Clone the Repository:**
 ```bash
-# Replace 'your-org' with your actual GitHub organization/username
-git clone https://github.com/your-org/gonka-cluster.git
+# Replace 'gonka' with your actual GitHub organization/username
+git clone https://github.com/gonka/gonka-cluster.git
 cd gonka-cluster
 ```
 
