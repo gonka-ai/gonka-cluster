@@ -19,9 +19,8 @@
   vars_files:
     - ../vars/main.yml
   roles:
-    - firewall
     - pre-validation
-  tags: ['phase1', 'firewall', 'pre-validation', 'environment']
+  tags: ['phase1', 'pre-validation', 'environment']
 
 - name: Phase 1.4 - Dependency Installation
   hosts: gonka_clusters
@@ -40,6 +39,14 @@
     - huggingface
     - docker
   tags: ['phase2', 'repository', 'models', 'docker-pull']
+
+- name: Phase 2.2 - Firewall Configuration
+  hosts: gonka_clusters
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - firewall
+  tags: ['phase2', 'firewall']
 
 - name: Phase 2.1 - Post-Repository Validation
   hosts: gonka_clusters

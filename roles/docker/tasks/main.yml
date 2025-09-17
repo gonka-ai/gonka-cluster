@@ -15,33 +15,43 @@
     append: yes
   become: true
 
-- name: Configure Docker to respect UFW rules
-  copy:
-    content: |
-      {
-        "iptables": false,
-        "userland-proxy": false,
-        "bridge": "none"
-      }
-    dest: /etc/docker/daemon.json
-    mode: '0644'
-  become: true
-  notify: restart docker
+- name: Ensure Docker daemon.json includes iptables=false and NVIDIA runtime without losing other settings
+  block:
+    - name: Check if daemon.json exists
+      stat:
+        path: /etc/docker/daemon.json
+      register: daemon_json_stat
 
-- name: Create UFW before rules for Docker
-  template:
-    src: docker-ufw-before-rules.j2
-    dest: /etc/ufw/before.rules
-    mode: '0640'
-  become: true
-  notify: reload ufw
+    - name: Read existing daemon.json
+      slurp:
+        path: /etc/docker/daemon.json
+      register: daemon_json_slurp
+      when: daemon_json_stat.stat.exists
 
-- name: Enable UFW Docker integration
-  lineinfile:
-    path: /etc/default/ufw
-    line: "IPTABLES_DIR=\"/etc/ufw\""
-    create: true
+    - name: Parse existing daemon.json
+      set_fact:
+        existing_daemon_json: "{{ (daemon_json_slurp.content | b64decode | from_json) if daemon_json_stat.stat.exists else {} }}"
+      when: daemon_json_stat.stat.exists
+
+    - name: Build merged daemon.json
+      set_fact:
+        merged_daemon_json: "{{ (existing_daemon_json | default({})) | combine(desired_daemon_overrides, recursive=True) }}"
+      vars:
+        desired_daemon_overrides:
+          iptables: false
+          runtimes:
+            nvidia:
+              args: []
+              path: nvidia-container-runtime
+
+    - name: Write merged daemon.json
+      copy:
+        content: "{{ merged_daemon_json | to_nice_json }}"
+        dest: /etc/docker/daemon.json
+        mode: '0644'
+      notify: restart docker
   become: true
+  tags: ['docker-daemon']
 
 - name: Refresh user groups (apply docker group membership)
   command: newgrp docker

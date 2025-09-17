@@ -6,9 +6,24 @@
   set_fact:
     cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
 
-- name: Enable UFW firewall
+- name: Ensure DEFAULT_FORWARD_POLICY is ACCEPT
+  lineinfile:
+    path: /etc/default/ufw
+    regexp: '^DEFAULT_FORWARD_POLICY='
+    line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
+    create: true
+  become: true
+
+- name: Set UFW default incoming policy to deny
   ufw:
-    state: enabled
+    direction: incoming
+    policy: deny
+  become: true
+
+- name: Set UFW default outgoing policy to allow
+  ufw:
+    direction: outgoing
+    policy: allow
   become: true
 
 - name: Allow SSH access
@@ -81,6 +96,11 @@
     proto: tcp
     from_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
   when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
+  become: true
+
+- name: Enable UFW firewall
+  ufw:
+    state: enabled
   become: true
 
 - name: Reload firewall rules
