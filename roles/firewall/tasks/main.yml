@@ -9,9 +9,35 @@
 - name: Ensure DEFAULT_FORWARD_POLICY is ACCEPT
   lineinfile:
     path: /etc/default/ufw
-    regexp: '^DEFAULT_FORWARD_POLICY='
+    regexp: '^#?DEFAULT_FORWARD_POLICY=.*'
     line: 'DEFAULT_FORWARD_POLICY="ACCEPT"'
+    insertafter: EOF
     create: true
+  become: true
+
+- name: Enable IPv4 forwarding persistently
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    sysctl_file: /etc/sysctl.d/99-gonka.conf
+  become: true
+
+- name: Ensure UFW NAT MASQUERADE for Docker subnets
+  blockinfile:
+    path: /etc/ufw/before.rules
+    marker: "# {mark} ANSIBLE DOCKER NAT"
+    insertbefore: '^\*filter'
+    create: true
+    block: |
+      # NAT table rules (Docker egress)
+      *nat
+      :POSTROUTING ACCEPT [0:0]
+      
+      # Forward traffic from Docker containers to the public interface
+      -A POSTROUTING -s 172.16.0.0/12 -j MASQUERADE
+      
+      COMMIT
   become: true
 
 - name: Set UFW default incoming policy to deny
