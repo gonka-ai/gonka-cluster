@@ -55,6 +55,12 @@
   register: package_tools
   ignore_errors: true
 
+- name: Install Python venv module (ensure ensurepip is available)
+  apt:
+    name: python3-venv
+    state: present
+  become: true
+
 - name: Create Python virtual environment
   command: python3 -m venv /opt/gonka-venv
   become: true
