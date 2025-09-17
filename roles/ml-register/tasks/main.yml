@@ -38,7 +38,7 @@
   vars:
     assigned_model: "{{ cluster_models[cluster_name].ml_node_models[ ml_idx % (cluster_models[cluster_name].ml_node_models | length) ].model }}"
     registration_model_args: "{{ model_configs[assigned_model].args | default([]) }}"
-    models_dict: {{ {assigned_model: {'args': registration_model_args}} }}
+    models_dict: "{{ {assigned_model: {'args': registration_model_args}} }}"
   uri:
     url: "http://localhost:9200/admin/v1/nodes"  # Local access only
     method: POST
