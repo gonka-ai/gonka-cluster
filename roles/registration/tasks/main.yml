@@ -2,9 +2,33 @@
 # Host Registration Role
 # Register network node with Gonka blockchain
 
+- name: Determine cluster name
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first | default('cluster1') }}"
+
+- name: Check for locally saved account pubkey (controller)
+  stat:
+    path: "{{ playbook_dir }}/../account_pubkey_{{ cluster_name }}.txt"
+  register: reg_pk_stat
+  delegate_to: localhost
+  become: false
+
+- name: Read locally saved account pubkey (controller)
+  slurp:
+    src: "{{ playbook_dir }}/../account_pubkey_{{ cluster_name }}.txt"
+  register: reg_pk_content
+  when: reg_pk_stat.stat.exists
+  delegate_to: localhost
+  become: false
+
+- name: Set account_pubkey_from_file fact (if available)
+  set_fact:
+    account_pubkey_from_file: "{{ reg_pk_content.content | b64decode | trim }}"
+  when: reg_pk_stat.stat.exists
+
 - name: Register host with Gonka Network
   shell: >
-    source {{ gonka_deploy_dir }}/config.env &&
+    . {{ gonka_deploy_dir }}/config.env &&
     docker compose run --rm --no-deps -T api /bin/sh -c '
     printf "%s\n" "$KEYRING_PASSWORD" |
     inferenced register-new-participant \
@@ -22,6 +46,26 @@
     ml_operational_address: "{{ host_registration.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
   when: host_registration.stdout is defined
 
+- name: Set public_url for confirmation checks
+  set_fact:
+    public_url: "{{ seed_api_url }}"
+
+- name: Check if ML operational address file already exists (controller)
+  stat:
+    path: "{{ playbook_dir }}/../ml_operational_address_{{ cluster_name }}.txt"
+  register: ml_addr_stat
+  delegate_to: localhost
+  become: false
+
+- name: Save ML operational address for local permission granting
+  copy:
+    content: "{{ ml_operational_address }}"
+    dest: "{{ playbook_dir }}/../ml_operational_address_{{ cluster_name }}.txt"
+    mode: '0644'
+  delegate_to: localhost
+  become: false  # Don't require sudo for local file operations
+  when: ml_operational_address is defined and not ml_addr_stat.stat.exists
+
 - name: Wait for registration confirmation
   uri:
     url: "{{ public_url }}/v1/participants/{{ ml_operational_address | default('unknown') }}"
@@ -37,7 +81,7 @@
     msg: |
       ✅ Host registered successfully on {{ inventory_hostname }}
       🌐 Public URL: {{ public_url }}
-      🔑 Account Key: {{ account_pubkey | truncate(20) }}...
+      🔑 Account Key: {{ (hostvars[groups[cluster_name + '_network_node'][0]][cluster_name + '_account_pubkey'] | default(account_pubkey_from_file | default('UNKNOWN'))) | truncate(20) }}...
       📍 ML Address: {{ ml_operational_address | default('NOT EXTRACTED') }}
       ✅ Registration: {{ registration_check.status == 200 | ternary('CONFIRMED', 'PENDING') }}
       🚀 Ready for permission granting

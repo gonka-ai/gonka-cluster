@@ -25,8 +25,8 @@ Cluster 1:
 └── ML Nodes (cluster1-ml-01 to cluster1-ml-05)
     ├── ML-01 to ML-04: Qwen3-235B-A22B-Instruct-2507-FP8 (tensor-parallel-size: 4)
     ├── ML-05: Qwen3-32B-FP8 (empty args)
-    ├── Inference Service (port 5000)
-    ├── Health Check (port 5000/health)
+    ├── Inference Service (port 5050)
+    ├── Health Check (port 5050/health)
     ├── GPU Monitoring (nvidia-smi)
     └── Connected to Network Node via Admin API
 
@@ -39,8 +39,8 @@ Cluster 2: (Identical structure)
 └── ML Nodes (cluster2-ml-01 to cluster2-ml-05)
     ├── ML-01 to ML-04: Qwen3-235B-A22B-Instruct-2507-FP8 (tensor-parallel-size: 4)
     ├── ML-05: Qwen3-32B-FP8 (empty args)
-    ├── Inference Service (port 5000)
-    ├── Health Check (port 5000/health)
+    ├── Inference Service (port 5050)
+    ├── Health Check (port 5050/health)
     ├── GPU Monitoring (nvidia-smi)
     └── Connected to Network Node via Admin API
 ```
@@ -124,7 +124,7 @@ This deployment uses **Ansible** for orchestration, providing:
 ### Network Requirements
 - **Public IP addresses** for all 8 servers (provided as input list)
 - **Currently open ports**: 22 (SSH), 80, 443
-- **Required Gonka ports** to be opened: 5000, 26657, 8000
+- **Required Gonka ports** to be opened: 5050, 26657, 8000
 - Internet connectivity for model downloads
 - Internal network connectivity between servers
 
@@ -135,8 +135,8 @@ This deployment uses **Ansible** for orchestration, providing:
 - **Security group updates** if applicable
 
 ### Port Mapping Architecture
-- **External Load Balancer/Proxy** maps ports 5050→ML:5000, 8080→ML:8080
-- **Network Node** does NOT expose 5050/8080 directly
+- **External Load Balancer/Proxy** maps ports 5000→ML:5050, 8080→ML:8080
+- **Network Node** does NOT expose 5000/8080 directly
 - **ML Nodes** receive requests via internal routing (not network node proxy)
 - **Network Node** focuses on blockchain operations and API services
 
@@ -145,14 +145,17 @@ This deployment uses **Ansible** for orchestration, providing:
 ### Phase 0: Account Key Setup
 
 **Phase 0 Overview:**
-- **0.1 Key Extraction**: Extract public keys from pre-generated account keys for each cluster
+- **0.1 Key Extraction**: Extract public keys from locally pre-generated account keys
 - **0.2 Key Validation**: Verify keys are accessible and properly formatted
 - **0.3 Key Distribution**: Make keys available to cluster-specific operations
+- **Note**: Phase 0 runs locally on deployment machine using local inferenced binary
 
 **This phase must run before any other deployment steps.**
 
 #### 0.1 Account Key Extraction (key-setup role)
-- **Local execution**: Run on deployment control node
+- **Local execution**: Run on deployment control node using local inferenced binary
+- **Key file access**: Reads from locally generated key files (./gonka-keys-cluster1)
+- **Public key extraction**: Uses local inferenced to extract public keys for remote deployment
 - **Cluster-specific keys**: Separate keys for cluster1 and cluster2
 - **Public key extraction**: Get gonka1 addresses for configuration
 - **Secure handling**: Keys stored securely for deployment use
@@ -326,9 +329,9 @@ pipelining = True
   - **Network node DAPI ML Port (9100)**: RESTRICTED to ML nodes only for DAPI communication
   - **Network node gRPC ML Port (9300)**: RESTRICTED to ML nodes only for gRPC communication
 - **Admin API (9200)**: NOT exposed publicly - access via SSH tunneling only
-  - **ML nodes**: Opens ports 5000, 8080 (inference + management) **BUT ONLY FROM NETWORK NODE IP**
+  - **ML nodes**: Opens ports 5050, 8080 (inference + management) **BUT ONLY FROM NETWORK NODE IP**
 - **Security**: ML node ports are restricted to network node access only for enhanced security
-- **External mapping**: Ports 5050/8080 mapped externally to ML node 5000/8080
+- **External mapping**: Ports 5000/8080 mapped externally to ML node 5050/8080
 - **Group-based configuration**: Uses Ansible host groups for role-specific rules
 - **Rule validation**: Verify firewall rules are applied correctly
 - **Connectivity tests**: Test inter-server communication
@@ -515,6 +518,7 @@ model_configs:
 - **Firewall Integration**: Configure Docker to respect UFW rules (prevents Docker from bypassing firewall)
 - **Performance Optimization**: Disable userland-proxy for direct iptables routing (optimal for ML workloads)
 - **Inter-Container Communication**: Allow containers to communicate (required for distributed ML operations)
+- **Containerized Operations**: All inferenced commands run inside API containers (not on host)
 - **Docker Daemon Config**: Disable Docker's iptables management to avoid rule conflicts
 - **UFW Before Rules**: Create Docker-specific UFW rules for proper container traffic filtering
 - **Docker compose pull**: Pull all images from compose files on ALL servers
@@ -1015,6 +1019,10 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
 #### 5.1 ML Node Launch Sequence (ml-deploy role)
 - **Docker_compose module**: Parallel ML service deployment
 - **Throttle**: Controlled deployment rate to prevent overload
+- **DAPI Connectivity Validation**: Verify ML node can access network node DAPI API
+- **Network Node IP Resolution**: Dynamically determine network node IP address
+- **Direct HTTP Connection**: Use actual IP:port instead of local container references
+- **Network Connectivity Test**: POST to `/v1/poc-batches/generated` endpoint
 - **Health checks**: Service readiness verification using documented endpoints
 - **GPU monitoring**: Memory utilization tracking
 - **Async tasks**: Non-blocking service startup monitoring
@@ -1072,6 +1080,9 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
 ```
 
 #### 5.2 Node Registration with Network (ml-register role)
+- **Pre-registration Validation**: Check ML node accessibility from network node via management API
+- **Accessibility Test**: Validate `http://ML_NODE_IP:8080/api/v1/state` endpoint connectivity
+- **Firewall Verification**: Confirm network node can reach ML node management ports
 - **URI module**: Admin API registration calls from network node (port 9200)
 - **Loop**: Sequential registration of all ML nodes from network node
 - **Delegate_to**: Execute registration tasks on network node
@@ -1089,7 +1100,7 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
     body:
       id: "ml-node-{{ item | regex_replace('\\.', '-') }}"
       host: "{{ item }}"
-      inference_port: 5000
+      inference_port: 5050
       poc_port: 8000
       max_concurrent: 500
       models: "{{ {item.model: model_configs[item.model]} if item.model in model_configs else {} }}"

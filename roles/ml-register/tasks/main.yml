@@ -6,27 +6,64 @@
 - name: Determine cluster name
   set_fact:
     cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
-  when: "'network_node' in group_names"
+
+# Pre-registration validation: Check ML node accessibility from network node
+- name: Validate ML node accessibility from network node
+  uri:
+    url: "http://{{ item }}:{{ management_port }}/api/v1/state"
+    method: GET
+  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
+  register: ml_node_validation
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
+  delegate_to: "{{ groups[cluster_name + '_network_node'][0] }}"
+
+- name: Assert ML node state endpoint is reachable
+  assert:
+    that: item.status == 200
+    fail_msg: "ML node {{ item.item }} state endpoint failed with status {{ item.status }}"
+  loop: "{{ ml_node_validation.results | default([]) }}"
+  when: "inventory_hostname in groups[cluster_name + '_network_node'] and ml_node_validation.results is defined"
+
+- name: Display ML node validation results
+  debug:
+    msg: |
+      ✅ ML Node {{ item.item }} is accessible from Network Node
+      📊 Status: {{ item.status }}
+      🔗 URL: http://{{ item.item }}:{{ management_port }}/api/v1/state
+  loop: "{{ ml_node_validation.results | default([]) }}"
+  when: "inventory_hostname in groups[cluster_name + '_network_node'] and ml_node_validation is defined"
 
 # Register all ML nodes in the cluster (loop through them)
 - name: Register all ML nodes with network node (local Admin API access)
+  vars:
+    assigned_model: "{{ cluster_models[cluster_name].ml_node_models[ ml_idx % (cluster_models[cluster_name].ml_node_models | length) ].model }}"
+    registration_model_args: "{{ model_configs[assigned_model].args | default([]) }}"
+    models_dict: "{{ {assigned_model: {'args': registration_model_args}} }}"
+    registration_payload:
+      id: "{{ ml_host }}"
+      host: "{{ hostvars[ml_host]['ansible_host'] }}"
+      inference_port: "{{ inference_port | int }}"
+      poc_port: "{{ management_port | int }}"
+      max_concurrent: 500
+      models: "{{ models_dict }}"
   uri:
     url: "http://localhost:9200/admin/v1/nodes"  # Local access only
     method: POST
     body_format: json
-    body:
-      id: "{{ cluster_name }}-ml-{{ loop_index }}"
-      host: "{{ item }}"
-      inference_port: "{{ inference_port }}"
-      poc_port: "{{ management_port }}"
-      max_concurrent: 500
-      models: "{{ model_configs[assigned_model] if assigned_model in model_configs else {} }}"
-    vars:
-      assigned_model: "{{ cluster_models[cluster_name].ml_node_models[loop_index % cluster_models[cluster_name].ml_node_models | length].model }}"
+    body: "{{ registration_payload }}"
   loop: "{{ groups[cluster_name + '_ml_nodes'] }}"
+  loop_control:
+    loop_var: ml_host
+    index_var: ml_idx
   register: registration_result
-  failed_when: item.status != 200
-  when: "'network_node' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
+
+- name: Assert ML node registration responses are 200
+  assert:
+    that: item.status == 200
+    fail_msg: "Registration of ML node {{ item.ml_host }} failed with status {{ item.status }}"
+  loop: "{{ registration_result.results | default([]) }}"
+  when: "inventory_hostname in groups[cluster_name + '_network_node'] and registration_result.results is defined"
 
 - name: Verify all ML nodes are registered (local Admin API access)
   uri:
@@ -34,7 +71,7 @@
     method: GET
   register: registered_nodes
   failed_when: "registered_nodes.json | length < groups[cluster_name + '_ml_nodes'] | length"
-  when: "'network_node' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
 
 - name: Display ML node registration success
   debug:
@@ -44,4 +81,4 @@
       🔗 Network Node: {{ inventory_hostname }}
       📊 Total registered: {{ registered_nodes.json | length }}
       🎯 ML Nodes: {{ groups[cluster_name + '_ml_nodes'] | join(', ') }}
-  when: "'network_node' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"

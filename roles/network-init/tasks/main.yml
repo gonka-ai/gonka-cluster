@@ -4,7 +4,7 @@
 
 - name: Start initial services (tmkms and node)
   shell: >
-    source {{ gonka_deploy_dir }}/config.env &&
+    . {{ gonka_deploy_dir }}/config.env &&
     docker compose up tmkms node -d --no-deps
   args:
     chdir: "{{ gonka_deploy_dir }}"

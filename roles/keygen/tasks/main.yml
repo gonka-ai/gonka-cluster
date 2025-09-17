@@ -2,9 +2,26 @@
 # Cryptographic Key Generation Role
 # Generate ML Operational Key inside API container
 
-- name: Generate ML Operational Key inside API container
+- name: Determine cluster name
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first | default('cluster1') }}"
+
+- name: Check if ML Operational Key already exists
   shell: >
-    source {{ gonka_deploy_dir }}/config.env &&
+    . {{ gonka_deploy_dir }}/config.env &&
+    docker compose run --rm --no-deps -T api /bin/sh -c '
+    printf "%s\n" "$KEYRING_PASSWORD" |
+    inferenced keys show "$KEY_NAME" --keyring-backend file
+    '
+  args:
+    chdir: "{{ gonka_deploy_dir }}"
+  register: ml_key_show
+  changed_when: false
+  failed_when: false
+
+- name: Generate ML Operational Key inside API container (when missing)
+  shell: >
+    . {{ gonka_deploy_dir }}/config.env &&
     docker compose run --rm --no-deps -T api /bin/sh -c '
     printf "%s\n%s\n" "$KEYRING_PASSWORD" "$KEYRING_PASSWORD" |
     inferenced keys add "$KEY_NAME" --keyring-backend file
@@ -12,18 +29,32 @@
   args:
     chdir: "{{ gonka_deploy_dir }}"
   register: ml_key_creation
+  when: ml_key_show.rc != 0
 
 - name: Secure backup of mnemonic
   copy:
     content: "{{ ml_key_creation.stdout }}"
     dest: "{{ gonka_deploy_dir }}/ml-key-backup-{{ ansible_date_time.iso8601 }}.txt"
     mode: '0600'
-  when: ml_key_creation.stdout is defined
+  when: ml_key_show.rc != 0 and ml_key_creation.stdout is defined
 
-- name: Extract ML operational address from key creation output
+- name: Consolidate ML key output for address extraction
   set_fact:
-    ml_operational_address: "{{ ml_key_creation.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
-  when: ml_key_creation.stdout is defined
+    ml_key_output: "{{ (ml_key_show.rc == 0) | ternary(ml_key_show.stdout, ml_key_creation.stdout | default('')) }}"
+
+- name: Extract ML operational address from key output
+  set_fact:
+    ml_operational_address: "{{ ml_key_output | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+  when: ml_key_output | length > 0
+
+- name: Save ML operational address for local permission granting
+  copy:
+    content: "{{ ml_operational_address }}"
+    dest: "{{ playbook_dir }}/../ml_operational_address_{{ cluster_name }}.txt"
+    mode: '0644'
+  delegate_to: localhost
+  become: false
+  when: ml_operational_address is defined
 
 - name: Display key generation success
   debug:

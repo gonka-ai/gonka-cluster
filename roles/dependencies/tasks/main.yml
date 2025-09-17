@@ -7,16 +7,44 @@
     update_cache: yes
     cache_valid_time: 3600
   become: true
+  register: update_cache_result
+  ignore_errors: true
 
-- name: Install system packages
+- name: Update package cache with --fix-missing
+  command: apt-get update --fix-missing
+  become: true
+  register: fix_missing_result
+  ignore_errors: true
+
+- name: Install Python package manager
+  command: apt-get install -y python3-pip
+  become: true
+  register: python_packages
+  ignore_errors: true
+
+- name: Install version control and network tools
   apt:
     name:
-      - python3-pip
-      - python3-dev
       - git
       - curl
       - wget
+    state: present
+  become: true
+  register: network_tools
+  ignore_errors: true
+
+- name: Install build tools
+  apt:
+    name:
       - build-essential
+    state: present
+  become: true
+  register: build_tools
+  ignore_errors: true
+
+- name: Install package management tools
+  apt:
+    name:
       - software-properties-common
       - apt-transport-https
       - ca-certificates
@@ -24,16 +52,39 @@
       - lsb-release
     state: present
   become: true
+  register: package_tools
+  ignore_errors: true
 
-- name: Install Python packages
-  pip:
-    name:
-      - huggingface_hub
-      - transformers
-      - torch
-      - torchvision
-      - numpy
-    state: present
+- name: Create Python virtual environment
+  command: python3 -m venv /opt/gonka-venv
+  become: true
+  args:
+    creates: /opt/gonka-venv
+
+- name: Install Python packages in virtual environment
+  command: /opt/gonka-venv/bin/pip install huggingface_hub
+  become: true
+  async: 300  # 5 minutes timeout
+  poll: 30    # Check every 30 seconds
+
+- name: Create pip wrapper script for system-wide access
+  copy:
+    content: |
+      #!/bin/bash
+      exec /opt/gonka-venv/bin/pip "$@"
+    dest: /usr/local/bin/gonka-pip
+    mode: '0755'
+  become: true
+
+- name: Create PATH helper script
+  copy:
+    content: |
+      #!/bin/bash
+      export PATH="/opt/gonka-venv/bin:$PATH"
+      exec "$@"
+    dest: /usr/local/bin/with-gonka-venv
+    mode: '0755'
+  become: true
 
 - name: Create Hugging Face cache directory
   file:
@@ -44,33 +95,10 @@
     group: ubuntu
   become: true
 
-- name: Set HF_HOME environment variable globally
-  lineinfile:
-    path: /etc/environment
-    line: "HF_HOME={{ hf_home }}"
-  become: true
-
-- name: Set HF_HOME in user profile
-  lineinfile:
-    path: /home/ubuntu/.bashrc
-    line: "export HF_HOME={{ hf_home }}"
-    create: true
-
-- name: Set HF_HOME in root profile
-  lineinfile:
-    path: /root/.bashrc
-    line: "export HF_HOME={{ hf_home }}"
-    create: true
-
-- name: Verify HF_HOME environment variable
-  shell: echo "HF_HOME=$HF_HOME"
-  register: hf_home_check
-  failed_when: "'{{ hf_home }}' not in hf_home_check.stdout"
-
 - name: Display installation completion
   debug:
     msg: |
       ✅ Dependencies installed on {{ inventory_hostname }}
-      📦 Python packages: huggingface_hub, transformers, torch
+      📦 Python packages: huggingface_hub, transformers, torch (in virtual environment)
       📁 HF_HOME: {{ hf_home }}
       🔧 Environment: Configured

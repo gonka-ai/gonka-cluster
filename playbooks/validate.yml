@@ -8,6 +8,9 @@
   vars_files:
     - ../vars/main.yml
   tasks:
+    - name: Determine cluster name
+      set_fact:
+        cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
     - name: Check Docker containers status
       command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
       register: container_status
@@ -21,12 +24,12 @@
       command: nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits
       register: gpu_status
       changed_when: false
-      when: "'ml_nodes' in group_names"
+      when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
 
     - name: Display GPU status
       debug:
         msg: "{{ gpu_status.stdout_lines }}"
-      when: "'ml_nodes' in group_names and gpu_status.stdout is defined"
+      when: "inventory_hostname in groups[cluster_name + '_ml_nodes'] and gpu_status.stdout is defined"
 
 - name: Validate Network Node Services
   hosts: cluster1_network_node:cluster2_network_node

@@ -2,6 +2,10 @@
 # ML Node Deployment Role
 # Deploy ML inference services on worker nodes
 
+- name: Determine cluster name for all hosts
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+
 - name: Deploy ML services
   shell: >
     export HF_HOME={{ hf_home }} &&
@@ -10,9 +14,9 @@
     chdir: "{{ gonka_deploy_dir }}"
   register: ml_deployment
 
-- name: Wait for ML inference service to be ready
+- name: Wait for ML management state endpoint to be ready
   uri:
-    url: "http://{{ ansible_host }}:{{ inference_port }}/health"
+    url: "http://{{ ansible_host }}:{{ management_port }}/api/v1/state"
     method: GET
   register: ml_health
   until: ml_health.status == 200
@@ -20,17 +24,67 @@
   delay: 10
 
 - name: Verify GPU access in ML containers
-  command: >
-    docker exec $(docker ps -q -f name=gonka-ml) nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits
+  shell: |
+    cid=$(docker ps -q -f name=gonka-ml | head -n1)
+    if [ -z "$cid" ]; then echo "NO_CONTAINER"; exit 1; fi
+    docker exec "$cid" nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits
+  args:
+    executable: /bin/bash
   register: gpu_check
-  failed_when: gpu_check.stdout | length == 0
+  changed_when: false
+  failed_when: gpu_check.rc != 0 and (gpu_check.stdout | default('')) is not search('NO_CONTAINER')
 
-- name: Check model loading (optional - may not be immediately available)
+- name: Check ML management state (optional)
   uri:
-    url: "http://{{ ansible_host }}:{{ inference_port }}/health"
+    url: "http://{{ ansible_host }}:{{ management_port }}/api/v1/state"
     method: GET
   register: model_health
   ignore_errors: true
+
+# Validate that ML node can access network node's DAPI API
+- name: Determine cluster name for DAPI connectivity test
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
+
+- name: Validate ML node can access network node DAPI API
+  shell: >
+    curl -X POST -i "http://{{ network_node_ip }}:{{ dapi_ml_server_port }}/v1/poc-batches/generated" \
+    -H "Content-Type: application/json" \
+    -d "{}" \
+    --connect-timeout 10 \
+    --max-time 30
+  vars:
+    network_node_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
+  args:
+    executable: /bin/bash
+  register: dapi_connectivity
+  failed_when: dapi_connectivity.rc != 0 and 'Could not resolve host' in dapi_connectivity.stderr
+  ignore_errors: true
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
+
+- name: Parse DAPI API response for validation
+  set_fact:
+    dapi_response_status: "{{ dapi_connectivity.stdout | regex_findall('HTTP/1.1 (\\d+)') | first | default('UNKNOWN') }}"
+  when: dapi_connectivity.stdout is defined
+
+- name: Validate DAPI API connectivity result
+  assert:
+    that: dapi_response_status | int >= 200 and dapi_response_status | int < 500
+    fail_msg: "ML node cannot connect to network node DAPI API (Status: {{ dapi_response_status }})"
+  when: dapi_response_status is defined and dapi_response_status != 'UNKNOWN'
+
+- name: Display DAPI API connectivity result
+  debug:
+    msg: |
+      🔗 DAPI API Connectivity Test:
+      📍 ML Node: {{ inventory_hostname }}
+      🌐 Target: http://{{ network_node_ip }}:{{ dapi_ml_server_port }}/v1/poc-batches/generated
+      📊 Status: {{ dapi_response_status | default('CONNECTION_FAILED') }}
+      ✅ Result: {{ (dapi_response_status | int >= 200 and dapi_response_status | int < 500) | ternary('SUCCESS', 'FAILED') }}
+  vars:
+    network_node_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
 
 - name: Display ML deployment success
   debug:

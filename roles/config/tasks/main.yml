@@ -6,13 +6,33 @@
   set_fact:
     cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
 
+- name: Check for locally saved account pubkey
+  stat:
+    path: "{{ playbook_dir }}/../account_pubkey_{{ cluster_name }}.txt"
+  register: pk_stat
+  delegate_to: localhost
+  become: false
+
+- name: Read locally saved account pubkey
+  slurp:
+    src: "{{ playbook_dir }}/../account_pubkey_{{ cluster_name }}.txt"
+  register: pk_content
+  when: pk_stat.stat.exists
+  delegate_to: localhost
+  become: false
+
+- name: Set account_pubkey_from_file fact (if available)
+  set_fact:
+    account_pubkey_from_file: "{{ pk_content.content | b64decode | trim }}"
+  when: pk_stat.stat.exists
+
 - name: Create config.env for all servers
   template:
     src: config.env.j2
     dest: "{{ gonka_deploy_dir }}/config.env"
   vars:
     network_node_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
-    account_pubkey: "{{ hostvars[groups[cluster_name + '_network_node'][0]][cluster_name + '_account_pubkey'] | default('PLACEHOLDER_PUBKEY') }}"
+    account_pubkey: "{{ hostvars[groups[cluster_name + '_network_node'][0]][cluster_name + '_account_pubkey'] | default(account_pubkey_from_file | default('PLACEHOLDER_PUBKEY')) }}"
 
 - name: Create node-config-generated.json for network nodes
   template:
@@ -20,7 +40,7 @@
     dest: "{{ gonka_deploy_dir }}/node-config-generated.json"
   vars:
     network_node_model: "{{ cluster_models[cluster_name].network_node_model }}"
-  when: "'network_node' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
 
 - name: Set correct permissions on config files
   file:
@@ -31,13 +51,13 @@
   loop:
     - config.env
     - node-config-generated.json
-  when: "'network_node' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
 
 - name: Display configuration generation success
   debug:
     msg: |
       ✅ Configuration generated on {{ inventory_hostname }}
-      📄 Files: config.env{% if 'network_node' in group_names %}, node-config-generated.json{% endif %}
+      📄 Files: config.env{% if inventory_hostname in groups[cluster_name + '_network_node'] %}, node-config-generated.json{% endif %}
       🔗 Cluster: {{ cluster_name }}
       🔑 Account Key: Configured
       🚀 Ready for service deployment

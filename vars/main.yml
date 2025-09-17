@@ -60,11 +60,13 @@ seed_api_url: "http://node2.gonka.ai:8000"
 seed_node_rpc_url: "http://node2.gonka.ai:26657"
 seed_node_p2p_url: "tcp://node2.gonka.ai:5000"
 
+second_seed_rpc_url: "http://node1.gonka.ai:26657"
+
 # Service configuration
 api_port: 8000
 rpc_port: 26657
 p2p_port: 5000
-inference_port: 5000
+inference_port: 5050
 management_port: 8080
 dapi_ml_server_port: 9100
 grpc_ml_server_port: 9300
@@ -79,3 +81,6 @@ compose_files:
 ansible_timeout: 600
 docker_timeout: 3600
 model_download_timeout: 7200
+
+# GPU configuration
+minimum_gpu_count: 1  # Minimum GPUs required (1 for test, 8 for production)

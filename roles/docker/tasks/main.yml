@@ -63,12 +63,8 @@
   register: docker_info
   failed_when: "'nvidia' not in docker_info.stdout"
 
-- name: Clean up unused Docker images
-  command: docker image prune -f
-  ignore_errors: true
-
 - name: Show pulled images
-  command: docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+  command: docker images --format "table {% raw %}{{.Repository}}{% endraw %}\t{% raw %}{{.Tag}}{% endraw %}\t{% raw %}{{.Size}}{% endraw %}"
   register: image_list
   changed_when: false
 

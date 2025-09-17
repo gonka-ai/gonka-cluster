@@ -46,7 +46,14 @@
     - docker-compose.yml
     - docker-compose.mlnode.yml
   register: compose_files
-  failed_when: "not item.stat.exists"
+
+- name: Verify all compose files exist
+  assert:
+    that: item.stat.exists
+    fail_msg: "Required compose file {{ item.item }} is missing"
+  loop: "{{ compose_files.results }}"
+  loop_control:
+    loop_var: item
 
 - name: Display repository cloning success
   debug:

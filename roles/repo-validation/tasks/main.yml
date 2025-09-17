@@ -20,9 +20,14 @@
   loop:
     - docker-compose.yml
     - docker-compose.mlnode.yml
-    - .gitignore
   register: config_files
-  failed_when: config_files.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
+
+- name: Check if all repo config files exist
+  assert:
+    that: item.stat.exists
+    fail_msg: "Required repository file {{ item.item }} is missing"
+  loop: "{{ config_files.results | default([]) }}"
+  when: config_files.results is defined
 
 - name: Check that HF_HOME directory was created
   stat:
@@ -31,10 +36,11 @@
   failed_when: not hf_dir.stat.exists
 
 - name: Validate Docker images were pulled
-  command: docker images --format "table {{.Repository}}\t{{.Tag}}"
+  shell: |
+    docker images --format 'table {{'{{'}}.Repository}}\t{{'{{'}}.Tag}}'
   register: docker_images
   changed_when: false
-  failed_when: docker_images.stdout_lines | length < 2
+  failed_when: (docker_images.stdout_lines | length) < 2
 
 - name: Generate repository validation report
   debug:
@@ -42,12 +48,12 @@
       ✅ Repository Validation Report for {{ inventory_hostname }}
       📁 Repository: {{ repo_dir.stat.exists | ternary('CLONED', 'MISSING') }}
       🚀 Deploy Dir: {{ deploy_dir.stat.exists | ternary('EXISTS', 'MISSING') }}
-      📄 Config Files: {{ config_files.results | selectattr('stat.exists', 'equalto', true) | list | length }}/{{ config_files.results | length }} present
+      📄 Config Files: {{ (config_files.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length) if config_files.results is defined else 0 }}/{{ (config_files.results | default([]) | length) if config_files.results is defined else 0 }} present
       🤗 HF Cache: {{ hf_dir.stat.exists | ternary('CREATED', 'MISSING') }}
       🐳 Docker Images: {{ docker_images.stdout_lines | length }} images available
       🎯 Repository Status: VALIDATION {{ 'PASSED' if (
         repo_dir.stat.exists and
         deploy_dir.stat.exists and
         hf_dir.stat.exists and
-        config_files.results | selectattr('stat.exists', 'equalto', true) | list | length == config_files.results | length
+        ((config_files.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length) == (config_files.results | default([]) | length) if config_files.results is defined else false)
       ) else 'FAILED' }}

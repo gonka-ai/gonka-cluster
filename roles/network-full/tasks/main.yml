@@ -4,7 +4,7 @@
 
 - name: Launch complete Docker Compose stack
   shell: >
-    source {{ gonka_deploy_dir }}/config.env &&
+    . {{ gonka_deploy_dir }}/config.env &&
     docker compose -f docker-compose.yml -f docker-compose.mlnode.yml up -d
   args:
     chdir: "{{ gonka_deploy_dir }}"
@@ -34,7 +34,13 @@
     - "http://{{ ansible_host }}:{{ api_port }}/v1/status"
     - "http://{{ ansible_host }}:{{ api_port }}/v1/participants"
   register: api_tests
-  failed_when: item.status != 200
+
+- name: Verify API endpoints returned 200
+  assert:
+    that: item.status == 200
+    fail_msg: "Endpoint {{ item.item }} returned status {{ item.status }}"
+  loop: "{{ api_tests.results | default([]) }}"
+  when: api_tests.results is defined
 
 - name: Display full activation success
   debug:

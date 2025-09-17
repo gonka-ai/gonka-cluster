@@ -4,13 +4,16 @@
 
 - name: Download required models
   shell: >
+    . /opt/gonka-venv/bin/activate &&
     export HF_HOME={{ hf_home }} &&
     huggingface-cli download {{ item.name }}
     --local-dir {{ hf_home }}/{{ item.name | replace('/', '_') }}
     --local-dir-use-symlinks False
+  args:
+    executable: /bin/bash
   loop: "{{ model_list.small + model_list.medium + model_list.large }}"
   async: "{{ model_download_timeout }}"
-  poll: 60
+  poll: 20
   register: download_result
 
 - name: Verify model downloads
@@ -26,7 +29,10 @@
 
 - name: Calculate total downloaded size
   shell: >
+    . /opt/gonka-venv/bin/activate &&
     du -sh {{ hf_home }}
+  args:
+    executable: /bin/bash
   register: total_size
   changed_when: false
 

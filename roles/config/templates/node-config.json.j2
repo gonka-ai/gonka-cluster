@@ -1,0 +1,16 @@
+[
+  {
+    "id": "node1",
+    "host": "inference",
+    "inference_port": 5000,
+    "poc_port": 8080,
+    "max_concurrent": 500,
+    "models": {
+      "{{ cluster_models[cluster_name].network_node_model }}": {
+        "args": {{ model_configs[cluster_models[cluster_name].network_node_model].args | to_json }}
+      }
+    }
+  }
+]
+
+

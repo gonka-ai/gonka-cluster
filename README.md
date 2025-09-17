@@ -18,72 +18,73 @@ cd gonka-cluster
 ```
 
 2. **Download and Setup Inferenced CLI:**
+
+**For macOS ARM64 (M1/M2):**
 ```bash
-# Download the inferenced binary for your platform
-# For macOS ARM64 (M1/M2):
 curl -L -o inferenced.zip https://github.com/gonka-ai/gonka/releases/download/release%2Fv0.2.0/inferenced-darwin-arm64.zip
-
-# Note: macOS may block execution initially - see verification step below
-
-# For Linux x86_64:
-# curl -L -o inferenced.zip https://github.com/gonka-ai/gonka/releases/download/release%2Fv0.2.0/inferenced-linux-amd64.zip
-
-# Extract and setup
 unzip inferenced.zip
 chmod +x inferenced
-
-# Verify installation
 ./inferenced --help
-
-# ⚠️ MacOS Users: If you see a security warning, allow execution:
-# Go to System Settings → Privacy & Security
-# Scroll down to find the warning about "inferenced" being blocked
-# Click "Allow Anyway" to enable execution
 ```
+
+**⚠️ MacOS Users:** If you see a security warning, go to System Settings → Privacy & Security, scroll down to find the warning about "inferenced" being blocked, and click "Allow Anyway" to enable execution.
 
 3. **Set Environment Variable:**
 ```bash
-# Set the password that will be used for all key operations
 export GONKA_KEYRING_PASSWORD="your-secure-password-here"
-
-# Keep this variable set for the entire deployment process
 ```
 
 4. **Generate Account Keys** (run locally with the environment variable set):
 ```bash
-# Generate account key for Cluster 1
 ./inferenced keys add gonka-account-key-cluster1 --keyring-backend file --home ./gonka-keys-cluster1
-
-# Generate account key for Cluster 2
 ./inferenced keys add gonka-account-key-cluster2 --keyring-backend file --home ./gonka-keys-cluster2
 ```
 
 5. **Update Inventory** - Replace placeholder IPs in `inventory.ini` with your actual server IPs
 
 6. **Install Ansible** on your deployment machine:
+
+**For macOS (with Homebrew):**
 ```bash
-pip install ansible
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install ansible
 ansible-galaxy collection install community.docker ansible.posix
 ```
 
-### Deploy Clusters
+**For macOS (with pip):**
+```bash
+python3 -m pip install --upgrade pip
+pip3 install ansible
+ansible-galaxy collection install community.docker ansible.posix
+```
+
+**Verify Installation:**
+```bash
+ansible --version
+ansible-galaxy --version
+```
+
+### Deploy Test Cluster
 
 **Important:** Keep the `GONKA_KEYRING_PASSWORD` environment variable set during the entire deployment process.
 
 ```bash
 # Ensure environment variable is set
-echo $GONKA_KEYRING_PASSWORD  # Should show your password
+echo $GONKA_KEYRING_PASSWORD
 
 # Run complete deployment
 ansible-playbook -i inventory.ini playbooks/deploy.yml
 
-# Or run specific phases
-ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase0  # Account key setup
-ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase1  # Infrastructure
-ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase2  # Models & Docker
-ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase3  # Keys & Config
-ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase4  # Network activation
-ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase5  # ML deployment
+# Or run specific phases for testing
+ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase0
+ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase1
+ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase2
+ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase3
+ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase4
+ansible-playbook -i inventory.ini playbooks/deploy.yml --tags phase5
+
+# Validate the test deployment
+ansible-playbook -i inventory.ini playbooks/validate.yml
 ```
 
 ## 📋 Cluster Architecture
@@ -155,11 +156,13 @@ cluster1-ml-02 ansible_host=YOUR_CLUSTER1_ML02_IP
 
 Ensure you have SSH key access to all servers:
 
+**Option 1: Copy SSH key to servers:**
 ```bash
-# Copy SSH key to all servers (replace with your key)
 ssh-copy-id -i ~/.ssh/gonka-deploy-key ubuntu@YOUR_SERVER_IP
+```
 
-# Or update ansible.cfg with your key path
+**Option 2: Update ansible.cfg with your key path:**
+```bash
 private_key_file = ~/.ssh/your-key-file
 ```
 
@@ -169,6 +172,7 @@ The deployment automatically configures Docker to respect UFW firewall rules:
 - **Firewall Integration**: Disables Docker's default iptables management to prevent rule conflicts
 - **Performance Optimization**: Disables userland-proxy for direct iptables routing (better for ML workloads)
 - **Inter-Container Communication**: Allows containers to communicate with each other (required for distributed ML)
+- **Inferenced Execution**: All blockchain operations run inside Docker containers (API containers)
 - **Security Enforcement**: Ensures UFW rules apply to all Docker container ports
 - **Network Isolation**: Maintains proper security isolation between clusters and services
 
@@ -176,10 +180,12 @@ The deployment automatically configures Docker to respect UFW firewall rules:
 
 ## 🎯 Deployment Phases
 
-### Phase 0: Account Key Setup
-- Extract public keys from pre-generated account keys
-- Validate key format
-- Prepare keys for deployment
+### Phase 0: Account Key Setup (Local Machine)
+- Extract public keys from locally pre-generated account keys
+- Use local inferenced binary (macOS version)
+- Validate key format and prepare for remote deployment
+- No remote server access required
+- No sudo/become privileges required (runs as current user)
 
 ### Phase 1: Infrastructure Setup
 - Configure firewall rules
@@ -194,9 +200,9 @@ The deployment automatically configures Docker to respect UFW firewall rules:
 ### Phase 3: Configuration & Keys
 - Generate config.env for all servers
 - Generate node-config-generated.json for network nodes
-- Create ML operational keys
-- Register hosts with blockchain
-- Grant ML operation permissions
+- Create ML operational keys (remote)
+- Register hosts with blockchain (remote)
+- Grant ML operation permissions (local machine, no sudo required)
 
 ### Phase 4: Network Activation
 - Launch complete network node services
@@ -204,6 +210,8 @@ The deployment automatically configures Docker to respect UFW firewall rules:
 
 ### Phase 5: ML Node Deployment
 - Deploy ML inference services
+- **DAPI connectivity validation**: Check ML node can access network node DAPI API (using actual IP)
+- **Pre-registration validation**: Check ML node accessibility from network node
 - Register ML nodes with network node
 - Validate model loading
 

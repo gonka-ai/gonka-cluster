@@ -1,47 +1,72 @@
 ---
-# Permission Granting Role
-# Grant ML operation permissions to operational key
+# Permission Granting Role (Local Machine)
+# Grant ML operation permissions to operational key via blockchain transaction
 
 - name: Determine cluster name
   set_fact:
-    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first | default('cluster1') }}"
 
-- name: Get ML operational address
+- name: Read ML operational address from file
+  slurp:
+    src: "{{ playbook_dir }}/../ml_operational_address_{{ cluster_name }}.txt"
+  register: ml_address_file
+
+- name: Set ML operational address from file
   set_fact:
-    ml_operational_address: "{{ hostvars[inventory_hostname]['ml_operational_address'] }}"
-  when: hostvars[inventory_hostname]['ml_operational_address'] is defined
+    ml_operational_address: "{{ ml_address_file.content | b64decode | trim }}"
+  when: ml_address_file.content is defined
 
-- name: Grant ML operation permissions using cluster-specific account key
+- name: Extract cold wallet address from local key (for safety check)
   shell: >
     printf '%s\n' "$KEYRING_PASSWORD" |
-    ./inferenced tx inference grant-ml-ops-permissions
-    {{ cluster_name }}-account-key
-    {{ ml_operational_address }}
-    --from {{ cluster_name }}-account-key
+    {{ playbook_dir }}/../inferenced keys show gonka-account-key-{{ cluster_name }}
     --keyring-backend file
-    --home ./gonka-keys-{{ cluster_name }}
-    --gas 2000000
-    --node {{ seed_node_rpc_url }}
-  args:
-    chdir: .  # Current directory where Ansible script is run
+    --home {{ playbook_dir }}/../gonka-keys-{{ cluster_name }}
+  register: cold_key_info
   environment:
     KEYRING_PASSWORD: "{{ keyring_password }}"
+
+- name: Parse cold wallet address
+  set_fact:
+    cold_wallet_address: "{{ cold_key_info.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
+
+- name: Assert ML operational address differs from cold wallet address
+  assert:
+    that:
+      - ml_operational_address is defined
+      - cold_wallet_address is defined
+      - ml_operational_address != cold_wallet_address
+    fail_msg: "ML operational address equals cold wallet address; aborting permission grant."
+
+- name: Grant ML operation permissions using local inferenced binary
+  shell: >
+    printf '%s\n' "$KEYRING_PASSWORD" |
+    {{ playbook_dir }}/../inferenced tx inference grant-ml-ops-permissions
+    gonka-account-key-{{ cluster_name }}
+    {{ ml_operational_address }}
+    --from gonka-account-key-{{ cluster_name }}
+    --keyring-backend file
+    --home {{ playbook_dir }}/../gonka-keys-{{ cluster_name }}
+    --gas 2000000
+    --node {{ seed_node_rpc_url }}
   register: permission_grant
   failed_when: "'error' in permission_grant.stderr or 'Transaction confirmed successfully' not in permission_grant.stdout"
+  environment:
+    KEYRING_PASSWORD: "{{ keyring_password }}"
   when: ml_operational_address is defined
 
 - name: Log permission transaction confirmation
   debug:
     msg: |
-      ✅ Permission transaction completed successfully on {{ inventory_hostname }}!
-      Transaction hash: {{ permission_grant.stdout | regex_findall('hash:\\s*([a-f0-9]+)') | first }}
-      Block height: {{ permission_grant.stdout | regex_findall('Block height:\\s*(\\d+)') | first }}
-      🔑 Account Key: {{ cluster_name }}-account-key
+      ✅ Permission transaction completed successfully locally!
+      Transaction hash: {{ (permission_grant.stdout | default('')) | regex_findall('hash:\s*([a-f0-9]+)') | first | default('UNKNOWN') }}
+      Block height: {{ (permission_grant.stdout | default('')) | regex_findall('Block height:\s*(\\d+)') | first | default('UNKNOWN') }}
+      🔑 Account Key: gonka-account-key-{{ cluster_name }}
       📍 ML Address: {{ ml_operational_address }}
-  when: "'Transaction confirmed successfully' in permission_grant.stdout"
+  when: permission_grant is defined and ('Transaction confirmed successfully' in (permission_grant.stdout | default('')))
 
 - name: Display permission granting completion
   debug:
     msg: |
-      🎉 All permissions granted on {{ inventory_hostname }}
+      🎉 ML operation permissions granted locally for {{ cluster_name }}
       🚀 Ready for full node activation

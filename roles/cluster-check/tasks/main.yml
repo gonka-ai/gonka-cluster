@@ -2,8 +2,13 @@
 # Cluster Health Check Role
 # Validate deployment status and cluster health
 
+- name: Determine cluster name for all hosts
+  set_fact:
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
+
 - name: Check Docker containers status
-  command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  shell:
+    cmd: docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}"
   register: container_status
   changed_when: false
 
@@ -15,12 +20,12 @@
   command: nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits
   register: gpu_status
   changed_when: false
-  when: "'ml_nodes' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
 
 - name: Display GPU status
   debug:
     msg: "{{ gpu_status.stdout_lines }}"
-  when: "'ml_nodes' in group_names and gpu_status.stdout is defined"
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes'] and gpu_status.stdout is defined"
 
 - name: Validate network node services
   uri:
@@ -30,38 +35,50 @@
     - "http://{{ ansible_host }}:{{ api_port }}/v1/status"
     - "http://{{ ansible_host }}:{{ rpc_port }}/status"
   register: network_checks
-  failed_when: item.status != 200
-  when: "'network_node' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
 
-- name: Validate ML node services
+- name: Assert network node endpoints are healthy
+  assert:
+    that: item.status == 200
+    fail_msg: "Endpoint {{ item.url }} returned status {{ item.status }}"
+  loop: "{{ network_checks.results | default([]) }}"
+  when: "inventory_hostname in groups[cluster_name + '_network_node'] and network_checks.results is defined"
+
+- name: Validate ML node management state endpoint
   uri:
-    url: "http://{{ ansible_host }}:{{ inference_port }}/health"
+    url: "http://{{ ansible_host }}:{{ management_port }}/api/v1/state"
     method: GET
-  register: ml_health
-  failed_when: ml_health.status != 200
-  when: "'ml_nodes' in group_names"
+    timeout: 10
+  register: ml_state
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
+
+- name: Assert ML node state endpoint is reachable
+  assert:
+    that: ml_state.status == 200
+    fail_msg: "ML node {{ inventory_hostname }} management state returned status {{ ml_state.status }}"
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes'] and ml_state is defined"
 
 - name: Check model files presence
   stat:
     path: "{{ hf_home }}/Qwen"
   register: model_files
-  when: "'ml_nodes' in group_names"
+  when: "inventory_hostname in groups[cluster_name + '_ml_nodes']"
 
 - name: Generate health report
   debug:
     msg: |
       🔍 Health Check Report for {{ inventory_hostname }}
       🐳 Containers: {{ container_status.stdout_lines | length }}
-      {% if 'network_node' in group_names %}
+      {% if inventory_hostname in groups[cluster_name + '_network_node'] %}
       🌐 Network API: {{ network_checks.results[0].status == 200 | ternary('HEALTHY', 'UNHEALTHY') }}
       🔗 Blockchain RPC: {{ network_checks.results[1].status == 200 | ternary('HEALTHY', 'UNHEALTHY') }}
       {% endif %}
-      {% if 'ml_nodes' in group_names %}
-      🚀 ML Inference: {{ ml_health.status == 200 | ternary('HEALTHY', 'UNHEALTHY') }}
+      {% if inventory_hostname in groups[cluster_name + '_ml_nodes'] %}
+      🚀 ML Management: {{ ml_state.status == 200 | ternary('HEALTHY', 'UNHEALTHY') if ml_state is defined else 'CHECKING' }}
       🧠 Models: {{ model_files.stat.exists | ternary('PRESENT', 'MISSING') }}
       🎮 GPU: {{ gpu_status.stdout_lines | length if gpu_status.stdout is defined else 0 }} GPUs detected
       {% endif %}
       ✅ Overall Status: {{ 'HEALTHY' if (
-        ('network_node' in group_names and network_checks.results[0].status == 200 and network_checks.results[1].status == 200) or
-        ('ml_nodes' in group_names and ml_health.status == 200)
+        (inventory_hostname in groups[cluster_name + '_network_node'] and network_checks.results[0].status == 200 and network_checks.results[1].status == 200) or
+        (inventory_hostname in groups[cluster_name + '_ml_nodes'] and ml_state is defined and ml_state.status == 200)
       ) else 'NEEDS ATTENTION' }}
