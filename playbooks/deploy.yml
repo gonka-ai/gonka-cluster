@@ -30,7 +30,7 @@
     - dependencies
   tags: ['phase1', 'dependencies', 'packages']
 
-- name: Phase 2.1.1 - Repository & Model Preparation
+- name: Phase 2.1.1 - Repository
   hosts: gonka_clusters
   vars_files:
     - ../vars/main.yml
@@ -38,7 +38,7 @@
     - git
   tags: ['phase2', 'git']
 
-- name: Phase 2.1.2 - Repository & Model Preparation
+- name: Phase 2.1.2 - Model Preparation
   hosts: gonka_clusters
   vars_files:
     - ../vars/main.yml
@@ -46,7 +46,7 @@
     - huggingface
   tags: ['phase2', 'huggingface']
 
-- name: Phase 2.1.3 - Repository & Model Preparation
+- name: Phase 2.1.3 - Docker Pull
   hosts: gonka_clusters
   vars_files:
     - ../vars/main.yml
