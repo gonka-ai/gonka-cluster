@@ -38,19 +38,20 @@
   vars:
     assigned_model: "{{ cluster_models[cluster_name].ml_node_models[ ml_idx % (cluster_models[cluster_name].ml_node_models | length) ].model }}"
     registration_model_args: "{{ model_configs[assigned_model].args | default([]) }}"
-    models_dict: "{{ {assigned_model: {'args': registration_model_args}} }}"
-    registration_payload:
-      id: "{{ ml_host }}"
-      host: "{{ hostvars[ml_host]['ansible_host'] }}"
-      inference_port: {{ inference_port | int }}
-      poc_port: {{ management_port | int }}
-      max_concurrent: 500
-      models: {{ models_dict }}
+    models_dict: {{ {assigned_model: {'args': registration_model_args}} }}
   uri:
     url: "http://localhost:9200/admin/v1/nodes"  # Local access only
     method: POST
     body_format: json
-    body: "{{ registration_payload }}"
+    body: |
+      {
+        "id": "{{ ml_host }}",
+        "host": "{{ hostvars[ml_host]['ansible_host'] }}",
+        "inference_port": {{ inference_port | int }},
+        "poc_port": {{ management_port | int }},
+        "max_concurrent": 500,
+        "models": {{ models_dict | to_json }}
+      }
   loop: "{{ groups[cluster_name + '_ml_nodes'] }}"
   loop_control:
     loop_var: ml_host
