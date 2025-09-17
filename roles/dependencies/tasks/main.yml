@@ -67,11 +67,30 @@
   args:
     creates: /opt/gonka-venv
 
-- name: Install Python packages in virtual environment
-  command: /opt/gonka-venv/bin/pip install huggingface_hub
+- name: Ensure pip exists in the virtual environment
+  command: /opt/gonka-venv/bin/python -m ensurepip --upgrade
+  args:
+    creates: /opt/gonka-venv/bin/pip
   become: true
-  async: 300  # 5 minutes timeout
-  poll: 30    # Check every 30 seconds
+
+- name: Upgrade pip, setuptools, and wheel in venv
+  pip:
+    name:
+      - pip
+      - setuptools
+      - wheel
+    state: latest
+    virtualenv: /opt/gonka-venv
+    virtualenv_command: python3 -m venv
+  become: true
+
+- name: Install Python packages in virtual environment
+  pip:
+    name:
+      - huggingface_hub
+    virtualenv: /opt/gonka-venv
+    virtualenv_command: python3 -m venv
+  become: true
 
 - name: Create pip wrapper script for system-wide access
   copy:
