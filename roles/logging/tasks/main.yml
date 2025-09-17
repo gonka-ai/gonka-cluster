@@ -10,19 +10,40 @@
     owner: ubuntu
     group: ubuntu
 
-- name: Configure Docker logging driver
-  copy:
-    dest: /etc/docker/daemon.json
-    content: |
-      {
-        "log-driver": "json-file",
-        "log-opts": {
-          "max-size": "10m",
-          "max-file": "3"
-        }
-      }
-    mode: '0644'
-  notify: restart docker
+- name: Ensure Docker logging configuration is set without losing other settings
+  block:
+    - name: Check if daemon.json exists
+      stat:
+        path: /etc/docker/daemon.json
+      register: daemon_json_stat
+
+    - name: Read existing daemon.json
+      slurp:
+        path: /etc/docker/daemon.json
+      register: daemon_json_slurp
+      when: daemon_json_stat.stat.exists
+
+    - name: Parse existing daemon.json
+      set_fact:
+        existing_daemon_json: "{{ (daemon_json_slurp.content | b64decode | from_json) if daemon_json_stat.stat.exists else {} }}"
+      when: daemon_json_stat.stat.exists
+
+    - name: Build merged daemon.json with logging options
+      set_fact:
+        merged_daemon_json: "{{ (existing_daemon_json | default({})) | combine(desired_logging_overrides, recursive=True) }}"
+      vars:
+        desired_logging_overrides:
+          log-driver: json-file
+          log-opts:
+            max-size: "1g"
+            max-file: "10"
+
+    - name: Write merged daemon.json with logging options
+      copy:
+        content: "{{ merged_daemon_json | to_nice_json }}"
+        dest: /etc/docker/daemon.json
+        mode: '0644'
+      notify: restart docker
   become: true
 
 - name: Display logging configuration
@@ -31,7 +52,7 @@
       📝 Logging configured on {{ inventory_hostname }}
       📁 Log Directory: {{ gonka_deploy_dir }}/logs
       🔧 Docker Logging: JSON file driver
-      📊 Max Size: 10MB per file, 3 files max
+      📊 Max Size: 1GB per file, 10 files max
 
 - name: Create log rotation configuration
   copy:

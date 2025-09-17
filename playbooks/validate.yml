@@ -68,7 +68,7 @@
   tasks:
     - name: Test ML inference endpoint
       uri:
-        url: "http://localhost:{{ inference_port }}/health"
+        url: "http://localhost:{{ inference_port }}/status"
         method: GET
       register: ml_health
       failed_when: ml_health.status != 200

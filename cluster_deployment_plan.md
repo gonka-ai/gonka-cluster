@@ -26,7 +26,7 @@ Cluster 1:
     ├── ML-01 to ML-04: Qwen3-235B-A22B-Instruct-2507-FP8 (tensor-parallel-size: 4)
     ├── ML-05: Qwen3-32B-FP8 (empty args)
     ├── Inference Service (port 5050)
-    ├── Health Check (port 5050/health)
+    ├── Health Check (port 5050/status)
     ├── GPU Monitoring (nvidia-smi)
     └── Connected to Network Node via Admin API
 
@@ -40,7 +40,7 @@ Cluster 2: (Identical structure)
     ├── ML-01 to ML-04: Qwen3-235B-A22B-Instruct-2507-FP8 (tensor-parallel-size: 4)
     ├── ML-05: Qwen3-32B-FP8 (empty args)
     ├── Inference Service (port 5050)
-    ├── Health Check (port 5050/health)
+    ├── Health Check (port 5050/status)
     ├── GPU Monitoring (nvidia-smi)
     └── Connected to Network Node via Admin API
 ```
@@ -1044,7 +1044,7 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
 # Wait for ML services to be ready
 - name: Wait for ML inference service to be ready
   uri:
-    url: "http://{{ ansible_host }}:5000/health"
+    url: "http://{{ ansible_host }}:5000/status"
     method: GET
   register: ml_health
   until: ml_health.status == 200
@@ -1062,7 +1062,7 @@ export TM_HOME=/opt/gonka-deploy/.tendermint
 # Test basic ML service health (using documented health endpoint)
 - name: Test ML service basic health
   uri:
-    url: "http://{{ ansible_host }}:5000/health"
+    url: "http://{{ ansible_host }}:5000/status"
     method: GET
   register: ml_service_health
   failed_when: ml_service_health.status != 200
