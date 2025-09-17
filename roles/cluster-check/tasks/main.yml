@@ -46,7 +46,7 @@
 
 - name: Validate ML node management state endpoint
   uri:
-    url: "http://{{ ansible_host }}:{{ management_port }}/api/v1/state"
+    url: "http://localhost:{{ management_port }}/api/v1/state"
     method: GET
     timeout: 10
   register: ml_state

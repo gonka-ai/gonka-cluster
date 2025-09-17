@@ -16,7 +16,7 @@
 
 - name: Wait for ML management state endpoint to be ready
   uri:
-    url: "http://{{ ansible_host }}:{{ management_port }}/api/v1/state"
+    url: "http://localhost:{{ management_port }}/api/v1/state"
     method: GET
   register: ml_health
   until: ml_health.status == 200
@@ -36,7 +36,7 @@
 
 - name: Check ML management state (optional)
   uri:
-    url: "http://{{ ansible_host }}:{{ management_port }}/api/v1/state"
+    url: "http://localhost:{{ management_port }}/api/v1/state"
     method: GET
   register: model_health
   ignore_errors: true
