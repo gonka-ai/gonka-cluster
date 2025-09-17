@@ -64,7 +64,7 @@
   args:
     chdir: "{{ gonka_deploy_dir }}"
   async: "{{ docker_timeout }}"
-  poll: 60
+  poll: 20
   register: pull_result
 
 - name: Verify NVIDIA runtime

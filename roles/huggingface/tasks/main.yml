@@ -7,8 +7,6 @@
     . /opt/gonka-venv/bin/activate &&
     export HF_HOME={{ hf_home }} &&
     huggingface-cli download {{ item.name }}
-    --local-dir {{ hf_home }}/{{ item.name | replace('/', '_') }}
-    --local-dir-use-symlinks False
   args:
     executable: /bin/bash
   loop: "{{ model_list.small + model_list.medium + model_list.large }}"
@@ -16,16 +14,26 @@
   poll: 20
   register: download_result
 
-- name: Verify model downloads
-  stat:
-    path: "{{ hf_home }}/{{ item.name | replace('/', '_') }}/config.json"
+- name: Validate HF cache presence for each model
+  shell: |
+    base="{{ hf_home }}/hub/models--{{ item.name | replace('/', '--') }}"
+    if [ ! -d "$base" ]; then exit 2; fi
+    # Prefer config.json in snapshots; otherwise accept any blob presence
+    if find "$base/snapshots" -type f -name config.json 2>/dev/null | head -n1 | grep -q .; then exit 0; fi
+    if find "$base/blobs" -type f 2>/dev/null | head -n1 | grep -q .; then exit 0; fi
+    exit 1
+  args:
+    executable: /bin/bash
   loop: "{{ model_list.small + model_list.medium + model_list.large }}"
-  register: model_verification
+  register: hf_cache_check
+  changed_when: false
+  failed_when: false
 
-- name: Report download status
-  debug:
-    msg: "Model {{ item.item.name }}: {{ 'SUCCESS' if item.stat.exists else 'FAILED' }}"
-  loop: "{{ model_verification.results }}"
+- name: Assert models present in HF cache
+  assert:
+    that: item.rc == 0
+    fail_msg: "Model {{ item.item.name }} not found in HF cache under {{ hf_home }}/hub/models--ORG--REPO/{snapshots|blobs}"
+  loop: "{{ hf_cache_check.results | default([]) }}"
 
 - name: Calculate total downloaded size
   shell: >
