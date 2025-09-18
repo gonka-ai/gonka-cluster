@@ -3,12 +3,26 @@
 # Download all required models to shared cache
 
 - name: Download required models
-  shell: >
-    . /opt/gonka-venv/bin/activate &&
-    export HF_HOME={{ hf_home }} &&
-    huggingface-cli download {{ item.name }} --resume
+  shell: |
+    . /opt/gonka-venv/bin/activate
+    export HF_HOME={{ hf_home }}
+    attempts={{ hf_download_retries | default(3) }}
+    i=1
+    while [ $i -le $attempts ]; do
+      echo "[HF] Download {{ item.name }} (attempt $i/$attempts)"
+      if huggingface-cli download {{ item.name }} --resume; then
+        exit 0
+      fi
+      sleep $(( 30 * i ))
+      i=$(( i + 1 ))
+    done
+    echo "[HF] Failed to download {{ item.name }} after $attempts attempts"
+    exit 1
   args:
     executable: /bin/bash
+  environment:
+    HF_TOKEN: "{{ lookup('env', 'HF_TOKEN') | default(omit) }}"
+    HF_HUB_ENABLE_HF_TRANSFER: "{{ hf_hub_enable_hf_transfer | default(omit) }}"
   loop: "{{ model_list.small + model_list.medium + model_list.large }}"
   async: "{{ model_download_timeout }}"
   poll: 20
