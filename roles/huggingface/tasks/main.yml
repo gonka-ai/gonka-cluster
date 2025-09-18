@@ -6,7 +6,7 @@
   shell: >
     . /opt/gonka-venv/bin/activate &&
     export HF_HOME={{ hf_home }} &&
-    huggingface-cli download {{ item.name }}
+    huggingface-cli download {{ item.name }} --resume
   args:
     executable: /bin/bash
   loop: "{{ model_list.small + model_list.medium + model_list.large }}"
