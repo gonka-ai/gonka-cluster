@@ -1,0 +1,62 @@
+---
+# Maintenance playbook: restart firewall, recreate config, restart API container
+
+- name: Apply firewall role on network nodes
+  hosts: cluster1_network_node:cluster2_network_node
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - { role: firewall, tags: [fw-restart] }
+
+- name: Recreate config on network nodes
+  hosts: cluster1_network_node:cluster2_network_node
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+  roles:
+    - { role: config, tags: [config-recreate] }
+
+- name: Restart API container (without sudo)
+  hosts: cluster1_network_node:cluster2_network_node
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+  tasks:
+    - name: Ensure docker group exists
+      group:
+        name: docker
+        state: present
+      become: true
+      tags: [api-restart]
+
+    - name: Ensure ubuntu user is in docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+      become: true
+      tags: [api-restart]
+
+    - meta: reset_connection
+
+    - name: Pause briefly to apply new group membership
+      pause:
+        seconds: 5
+      tags: [api-restart]
+
+    - name: Start (force-recreate) API container with config.env
+      shell: . {{ gonka_deploy_dir }}/config.env && docker compose -f docker-compose.yml up -d --no-deps --force-recreate api
+      args:
+        chdir: "{{ gonka_deploy_dir }}"
+      register: api_up
+      tags: [api-restart]
+
+    - name: Show API restart result
+      debug:
+        msg: |
+          API restart completed on {{ inventory_hostname }}
+          up: {{ (api_up.stdout | default('')) | trim }}
+      tags: [api-restart]
+
+

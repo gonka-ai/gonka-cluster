@@ -84,24 +84,30 @@
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   become: true
 
-# DAPI API ML Server Port - RESTRICTED to ML nodes only
-- name: Allow DAPI API ML server port from ML nodes only
+# DAPI API ML Server Port - allow from ML nodes and network node
+- name: Allow DAPI API ML server port from ML nodes and network node
+  vars:
+    network_node_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
+    allowed_dapi_sources: "{{ (groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list) + [network_node_ip] }}"
   ufw:
     rule: allow
     port: "{{ dapi_ml_server_port }}"
     proto: tcp
     from_ip: "{{ item }}"
-  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
+  loop: "{{ allowed_dapi_sources }}"
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   become: true
 
-- name: Allow gRPC ML server port from ML nodes only
+- name: Allow gRPC ML server port from ML nodes and network node
+  vars:
+    network_node_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
+    allowed_grpc_sources: "{{ (groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list) + [network_node_ip] }}"
   ufw:
     rule: allow
     port: "{{ grpc_ml_server_port }}"
     proto: tcp
     from_ip: "{{ item }}"
-  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
+  loop: "{{ allowed_grpc_sources }}"
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   become: true
 
