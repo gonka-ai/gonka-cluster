@@ -7,12 +7,17 @@
   set_fact:
     cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
 
+# Allow skipping specific ML hosts via skip_ml_hosts (list of inventory hostnames)
+- name: Compute ML hosts to register for this cluster
+  set_fact:
+    ml_hosts_to_register: "{{ (groups[cluster_name + '_ml_nodes'] | default([])) | difference(skip_ml_hosts | default([])) }}"
+
 # Pre-registration validation: Check ML node accessibility from network node
 - name: Validate ML node accessibility from network node
   uri:
     url: "http://{{ item }}:{{ management_port }}/api/v1/state"
     method: GET
-  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
+  loop: "{{ ml_hosts_to_register | map('extract', hostvars, 'ansible_host') | list }}"
   register: ml_node_validation
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   delegate_to: "{{ groups[cluster_name + '_network_node'][0] }}"
@@ -52,7 +57,7 @@
         "max_concurrent": 500,
         "models": {{ models_dict | to_json }}
       }
-  loop: "{{ groups[cluster_name + '_ml_nodes'] }}"
+  loop: "{{ ml_hosts_to_register }}"
   loop_control:
     loop_var: ml_host
     index_var: ml_idx
