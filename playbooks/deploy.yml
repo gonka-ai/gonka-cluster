@@ -2,11 +2,9 @@
 # Gonka Two-Cluster Deployment Playbook
 # Deploys two independent clusters with model distribution
 
-- name: Phase 0 - Account Key Setup (Local Machine)
-  hosts: localhost
-  connection: local
+- name: Phase 0 - Account Key Setup (Network Nodes)
+  hosts: cluster1_network_node:cluster2_network_node
   gather_facts: false
-  become: false  # Don't require sudo for local operations
   vars_files:
     - ../vars/main.yml
   roles:
@@ -102,11 +100,9 @@
     - registration
   tags: ['phase3', 'registration', 'host-registration']
 
-- name: Phase 3.5 - Permission Granting (Local Machine)
-  hosts: localhost
-  connection: local
+- name: Phase 3.5 - Permission Granting (Network Nodes)
+  hosts: cluster1_network_node:cluster2_network_node
   gather_facts: false
-  become: false  # Don't require sudo for local operations
   vars_files:
     - ../vars/main.yml
   roles:

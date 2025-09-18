@@ -2,14 +2,10 @@
 # Permission Granting Role (Local Machine)
 # Grant ML operation permissions to operational key via blockchain transaction
 
-- name: Discover cluster groups
+- name: Determine cluster name
   set_fact:
-    cluster_groups: "{{ groups.keys() | select('match', '^cluster[0-9]+$') | list | default(['cluster1']) }}"
+    cluster_name: "{{ group_names | select('match', 'cluster[0-9]+') | first }}"
 
-- name: Run permissions per cluster
+- name: Run permissions locally for this cluster
   include_tasks: per-cluster.yml
-  loop: "{{ cluster_groups }}"
-  loop_control:
-    loop_var: loop_cluster_name
-  vars:
-    cluster_name: "{{ loop_cluster_name }}"
+  when: inventory_hostname == groups[cluster_name + '_network_node'][0]

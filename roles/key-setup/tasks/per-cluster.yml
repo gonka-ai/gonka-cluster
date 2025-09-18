@@ -2,6 +2,8 @@
 # Key setup tasks for a single cluster (uses var: cluster_name)
 
 - name: Extract cluster account public key from local key files
+  delegate_to: localhost
+  become: false
   shell: >
     printf '%s\n' "$KEYRING_PASSWORD" |
     {{ playbook_dir }}/../inferenced keys show gonka-account-key-{{ cluster_name }}
@@ -13,19 +15,27 @@
     KEYRING_PASSWORD: "{{ keyring_password }}"
 
 - name: Store cluster account pubkey
+  delegate_to: localhost
+  become: false
   set_fact:
     "{{ cluster_name }}_account_pubkey": "{{ account_key_info.stdout | regex_findall('\"key\":\"([^\"]+)\"') | first }}"
 
 - name: Get account pubkey for validation
+  delegate_to: localhost
+  become: false
   set_fact:
     temp_account_pubkey: "{{ lookup('vars', cluster_name + '_account_pubkey') }}"
 
 - name: Validate account key format
+  delegate_to: localhost
+  become: false
   assert:
     that: temp_account_pubkey is defined and temp_account_pubkey | length > 10
     fail_msg: "Invalid {{ cluster_name }} account key format: {{ temp_account_pubkey }}"
 
 - name: Display key extraction success
+  delegate_to: localhost
+  become: false
   debug:
     msg: |
       ✅ {{ cluster_name | upper }} Account PubKey Extracted Successfully:
@@ -33,11 +43,15 @@
       📁 Keyring: ./gonka-keys-{{ cluster_name }}
 
 - name: Publish account pubkey to network node hostvars
+  delegate_to: localhost
+  become: false
   add_host:
     name: "{{ groups[cluster_name + '_network_node'][0] }}"
     "{{ cluster_name }}_account_pubkey": "{{ temp_account_pubkey }}"
 
 - name: Save account pubkey locally for reuse across runs
+  delegate_to: localhost
+  become: false
   copy:
     content: "{{ temp_account_pubkey }}"
     dest: "{{ playbook_dir }}/../account_pubkey_{{ cluster_name }}.txt"

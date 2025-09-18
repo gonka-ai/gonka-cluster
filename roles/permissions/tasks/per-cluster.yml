@@ -2,16 +2,22 @@
 # Permissions tasks for a single cluster (uses var: cluster_name)
 
 - name: Read ML operational address from file
+  delegate_to: localhost
+  become: false
   slurp:
     src: "{{ playbook_dir }}/../ml_operational_address_{{ cluster_name }}.txt"
   register: ml_address_file
 
 - name: Set ML operational address from file
+  delegate_to: localhost
+  become: false
   set_fact:
     ml_operational_address: "{{ ml_address_file.content | b64decode | trim }}"
   when: ml_address_file.content is defined
 
 - name: Extract cold wallet address from local key (for safety check)
+  delegate_to: localhost
+  become: false
   shell: >
     printf '%s\n' "$KEYRING_PASSWORD" |
     {{ playbook_dir }}/../inferenced keys show gonka-account-key-{{ cluster_name }}
@@ -22,10 +28,14 @@
     KEYRING_PASSWORD: "{{ keyring_password }}"
 
 - name: Parse cold wallet address
+  delegate_to: localhost
+  become: false
   set_fact:
     cold_wallet_address: "{{ cold_key_info.stdout | regex_findall('gonka1[a-z0-9]{38}') | first }}"
 
 - name: Assert ML operational address differs from cold wallet address
+  delegate_to: localhost
+  become: false
   assert:
     that:
       - ml_operational_address is defined
@@ -34,6 +44,8 @@
     fail_msg: "ML operational address equals cold wallet address; aborting permission grant."
 
 - name: Grant ML operation permissions using local inferenced binary
+  delegate_to: localhost
+  become: false
   shell: >
     printf '%s\n' "$KEYRING_PASSWORD" |
     {{ playbook_dir }}/../inferenced tx inference grant-ml-ops-permissions
@@ -51,6 +63,8 @@
   when: ml_operational_address is defined
 
 - name: Log permission transaction confirmation
+  delegate_to: localhost
+  become: false
   debug:
     msg: |
       ✅ Permission transaction completed successfully locally!
@@ -61,6 +75,8 @@
   when: permission_grant is defined and ('Transaction confirmed successfully' in (permission_grant.stdout | default('')))
 
 - name: Display permission granting completion
+  delegate_to: localhost
+  become: false
   debug:
     msg: |
       🎉 ML operation permissions granted locally for {{ cluster_name }}
