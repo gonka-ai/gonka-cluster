@@ -50,8 +50,6 @@
     "{{ cluster_name }}_account_pubkey": "{{ temp_account_pubkey }}"
 
 - name: Save account pubkey locally for reuse across runs
-  delegate_to: localhost
-  become: false
   copy:
     content: "{{ temp_account_pubkey }}"
     dest: "{{ playbook_dir }}/../account_pubkey_{{ cluster_name }}.txt"
