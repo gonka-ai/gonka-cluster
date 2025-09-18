@@ -17,7 +17,6 @@
   uri:
     url: "http://{{ item }}:{{ management_port }}/api/v1/state"
     method: GET
-  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
   loop: "{{ ml_hosts_to_register | map('extract', hostvars, 'ansible_host') | list }}"
   register: ml_node_validation
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
