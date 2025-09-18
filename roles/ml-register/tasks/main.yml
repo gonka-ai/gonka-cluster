@@ -17,17 +17,16 @@
   uri:
     url: "http://{{ item }}:{{ management_port }}/api/v1/state"
     method: GET
+  loop: "{{ groups[cluster_name + '_ml_nodes'] | map('extract', hostvars, 'ansible_host') | list }}"
   loop: "{{ ml_hosts_to_register | map('extract', hostvars, 'ansible_host') | list }}"
   register: ml_node_validation
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   delegate_to: "{{ groups[cluster_name + '_network_node'][0] }}"
-  failed_when: false
-  changed_when: false
-  timeout: 5
 
-- name: Log ML node state reachability
-  debug:
-    msg: "{{ item.item }} -> status {{ item.status | default('UNREACHABLE') }}"
+- name: Assert ML node state endpoint is reachable
+  assert:
+    that: item.status == 200
+    fail_msg: "ML node {{ item.item }} state endpoint failed with status {{ item.status }}"
   loop: "{{ ml_node_validation.results | default([]) }}"
   when: "inventory_hostname in groups[cluster_name + '_network_node'] and ml_node_validation.results is defined"
 
@@ -64,7 +63,7 @@
     loop_var: ml_host
     index_var: ml_idx
   register: registration_result
-  when: "inventory_hostname in groups[cluster_name + '_network_node'] and (ml_node_validation.results[ml_idx].status | default(0)) == 200"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
 
 - name: Assert ML node registration responses are 200
   assert:
@@ -78,7 +77,7 @@
     url: "http://localhost:9200/admin/v1/nodes"  # Local access only
     method: GET
   register: registered_nodes
-  failed_when: "registered_nodes.json | length < ml_hosts_to_register | length"
+  failed_when: "registered_nodes.json | length < groups[cluster_name + '_ml_nodes'] | length"
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
 
 - name: Display ML node registration success
