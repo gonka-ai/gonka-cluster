@@ -28,7 +28,7 @@
       when: not deploy_dir.stat.exists
 
     - name: Stop network node container
-      shell: bash -lc 'docker compose stop node'
+      shell: bash -lc 'docker compose down node'
       args:
         chdir: "{{ gonka_deploy_dir }}"
 
