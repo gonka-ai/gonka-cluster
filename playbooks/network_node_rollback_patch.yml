@@ -1,0 +1,98 @@
+---
+# Network Node Rollback and Patch Playbook
+
+- name: Rollback one block and apply v0.2.1-patch to network node
+  hosts: cluster1_network_node:cluster2_network_node
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+
+  vars:
+    cosmovisor_root: "{{ gonka_deploy_dir }}/.inference/cosmovisor"
+    upgrade_name: "v0.2.1-patch"
+    upgrade_dir: "{{ cosmovisor_root }}/upgrades/{{ upgrade_name }}"
+    upgrade_bin_dir: "{{ upgrade_dir }}/bin"
+    inferenced_url: "https://github.com/product-science/race-releases/releases/download/release%2Fv0.2.1-patch-alpha1/inferenced"
+    inferenced_download_path: "{{ gonka_deploy_dir }}/inferenced"
+    inferenced_sha256: "3d1a29f0aad194a5a287b2e4359b927285d8efac30b2b29d56a9400d690b6a35"
+
+  tasks:
+    - name: Ensure deploy directory exists
+      stat:
+        path: "{{ gonka_deploy_dir }}"
+      register: deploy_dir
+
+    - name: Fail if deploy directory is missing
+      fail:
+        msg: "gonka_deploy_dir not found at {{ gonka_deploy_dir }}"
+      when: not deploy_dir.stat.exists
+
+    - name: Stop network node container
+      shell: bash -lc 'docker compose stop node'
+      args:
+        chdir: "{{ gonka_deploy_dir }}"
+
+    - name: Rollback blockchain state by one block (inside compose runtime)
+      shell: bash -lc 'source config.env && docker compose run --rm node inferenced rollback --home /root/.inference/'
+      args:
+        chdir: "{{ gonka_deploy_dir }}"
+
+    - name: Download patched inferenced binary
+      get_url:
+        url: "{{ inferenced_url }}"
+        dest: "{{ inferenced_download_path }}"
+        mode: '0755'
+      become: true
+
+    - name: Create cosmovisor upgrade bin directory
+      file:
+        path: "{{ upgrade_bin_dir }}"
+        state: directory
+        mode: '0755'
+      become: true
+
+    - name: Install patched inferenced binary into upgrade bin
+      copy:
+        src: "{{ inferenced_download_path }}"
+        dest: "{{ upgrade_bin_dir }}/inferenced"
+        mode: '0755'
+        remote_src: true
+      become: true
+
+    - name: Remove existing cosmovisor current symlink if present
+      file:
+        path: "{{ cosmovisor_root }}/current"
+        state: absent
+      become: true
+
+    - name: Point cosmovisor current to the new upgrade
+      file:
+        src: "{{ upgrade_dir }}"
+        dest: "{{ cosmovisor_root }}/current"
+        state: link
+      become: true
+
+    - name: Verify inferenced binary checksum
+      shell: |
+        set -e
+        echo "{{ inferenced_sha256 }}  {{ cosmovisor_root }}/current/bin/inferenced" | sha256sum -c --status
+      args:
+        chdir: "{{ gonka_deploy_dir }}"
+      register: sha_check
+      changed_when: false
+      failed_when: sha_check.rc != 0
+      become: true
+
+    - name: Start updated node, api and proxy
+      shell: bash -lc 'source config.env && docker compose up node api proxy -d --no-deps --force-recreate'
+      args:
+        chdir: "{{ gonka_deploy_dir }}"
+
+    - name: Display SUCCESS after checksum verification
+      debug:
+        msg: "SUCCESS"
+      when: sha_check is not skipped
+
+  tags: ['network-node', 'rollback', 'patch', 'cosmovisor']
+
+
