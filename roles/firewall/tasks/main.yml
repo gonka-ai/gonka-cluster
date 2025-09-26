@@ -84,6 +84,37 @@
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   become: true
 
+# Network node local-only access for inference/management ports
+- name: Allow network node inference port from localhost and self
+  vars:
+    network_node_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
+    allowed_local_sources:
+      - "127.0.0.1"
+      - "{{ network_node_ip }}"
+  ufw:
+    rule: allow
+    port: "{{ inference_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ allowed_local_sources }}"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
+  become: true
+
+- name: Allow network node management port from localhost and self
+  vars:
+    network_node_ip: "{{ hostvars[groups[cluster_name + '_network_node'][0]]['ansible_host'] }}"
+    allowed_local_sources:
+      - "127.0.0.1"
+      - "{{ network_node_ip }}"
+  ufw:
+    rule: allow
+    port: "{{ management_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ allowed_local_sources }}"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
+  become: true
+
 # DAPI API ML Server Port - allow from ML nodes and network node
 - name: Allow DAPI API ML server port from ML nodes and network node
   vars:
@@ -108,6 +139,19 @@
     proto: tcp
     from_ip: "{{ item }}"
   loop: "{{ allowed_grpc_sources }}"
+  when: "inventory_hostname in groups[cluster_name + '_network_node']"
+  become: true
+
+## Allow 9100 from Docker bridge subnets on network nodes
+- name: Allow DAPI API ML server port from Docker bridge subnets
+  ufw:
+    rule: allow
+    port: "{{ dapi_ml_server_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop:
+    - "172.18.0.0/16"
+    - "172.17.0.0/16"
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   become: true
 
