@@ -1,0 +1,18 @@
+---
+- name: Ensure additional to all cluster nodes
+  hosts: cluster1_network_node:cluster1_ml_nodes:cluster2_network_node:cluster2_ml_nodes:gonka_clusters
+  gather_facts: false
+  vars:
+    additional_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJzTnkKXWR9e5eDQY7Tpl7qP4nmiV7uUkeJB+e7amqHr da@liberman.net"
+    target_user: "ubuntu"
+  tasks:
+    - name: Ensure additional is present
+      ansible.builtin.authorized_key:
+        user: "{{ target_user }}"
+        state: present
+        key: "{{ additional_pubkey }}"
+        manage_dir: true
+        exclusive: false
+
+
+
