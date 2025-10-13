@@ -150,8 +150,7 @@
     proto: tcp
     from_ip: "{{ item }}"
   loop:
-    - "172.18.0.0/16"
-    - "172.17.0.0/16"
+    - "172.16.0.0/12"
   when: "inventory_hostname in groups[cluster_name + '_network_node']"
   become: true
 
