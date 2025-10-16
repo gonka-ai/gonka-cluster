@@ -1,0 +1,65 @@
+---
+# Installs / updates the latest stable Docker
+# Doesn't check the plathform - always amd64 => no arm supported
+- name: Install prerequisites
+  become: true
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+
+- name: Create keyrings directory
+  become: true
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add Docker GPG key
+  become: true
+  get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+
+- name: Add Docker apt repository (amd64, stable)
+  become: true
+  copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: |
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+
+- name: Update apt cache
+  become: true
+  apt:
+    update_cache: true
+
+- name: Install Docker Engine and components
+  become: true
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Add current user to docker group
+  become: true
+  user:
+    name: "{{ ansible_user | default(ansible_ssh_user) }}"
+    groups: docker
+    append: true
+
+- name: Enable and start Docker service
+  become: true
+  service:
+    name: docker
+    state: started
+    enabled: true
+

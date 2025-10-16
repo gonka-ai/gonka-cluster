@@ -14,17 +14,29 @@
     fail_msg: "Server must run Ubuntu 22.04.x or 24.04.x (found: {{ ansible_distribution }} {{ ansible_distribution_version }})"
   when: ansible_distribution is defined
 
-- name: Ensure Docker service is running
-  service:
-    name: docker
-    state: started
-  register: docker_service
+- name: Check actual Docker version
+  command: docker --version
+  register: docker_ver_raw
+  failed_when: false
+  changed_when: false
 
-- name: Validate Docker version
+- set_fact:
+    docker_semver: "{{ (docker_ver_raw.stdout | regex_search('([0-9]+\\.[0-9]+\\.[0-9]+)')) | default('0.0.0', true) }}"
+
+- name: Install/upgrade Docker to latest stable
+  include_tasks: install_docker.yml
+  when: docker_semver is version('28.3.0', '<')
+
+- name: Re-check Docker version
   command: docker --version
   register: docker_version
   changed_when: false
-  failed_when: docker_version.stdout is not match('Docker version 28\.[3-4]\.[0-9]+')
+
+- name: Ensure Docker version >= 28.3.0
+  assert:
+    that:
+      - "(docker_version.stdout | regex_search('([0-9]+\\.[0-9]+\\.[0-9]+)')) is version('28.3.0', '>=')"
+    fail_msg: "Docker must be >= 28.3.0 (got: {{ docker_version.stdout | default('unknown') }})"
 
 - name: Check NVIDIA GPU availability
   command: nvidia-smi --query-gpu=name --format=csv,noheader,nounits
