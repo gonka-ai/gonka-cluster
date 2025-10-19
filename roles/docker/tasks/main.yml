@@ -21,6 +21,14 @@
   pause:
     seconds: 1
 
+- name: Ensure NVIDIA container toolkit is installed
+  apt:
+    name:
+      - nvidia-container-toolkit
+    state: present
+    update_cache: true
+  become: true
+
 - name: Ensure Docker daemon.json includes iptables=false and NVIDIA runtime without losing other settings
   block:
     - name: Check if daemon.json exists
@@ -55,7 +63,6 @@
         content: "{{ merged_daemon_json | to_nice_json }}"
         dest: /etc/docker/daemon.json
         mode: '0644'
-      notify: restart docker
   become: true
   tags: ['docker-daemon']
 
@@ -66,6 +73,12 @@
   async: "{{ docker_timeout }}"
   poll: 20
   register: pull_result
+
+- name: Restart Docker daemon
+  service:
+    name: docker
+    state: restarted
+  become: true
 
 - name: Verify NVIDIA runtime
   command: docker info
