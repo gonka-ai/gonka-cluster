@@ -2,6 +2,18 @@
 # Gonka Two-Cluster Deployment Playbook
 # Deploys two independent clusters with model distribution
 
+- name: Preflight Checks
+  hosts: localhost
+  gather_facts: false
+  tags: ['always', 'preflight']
+  tasks:
+    - name: Ensure GONKA_KEYRING_PASSWORD env var is set
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'GONKA_KEYRING_PASSWORD', errors='strict') | length > 0
+        fail_msg: "Missing environment variable GONKA_KEYRING_PASSWORD; export it before running deployment."
+      run_once: true
+
 - name: Phase 0 - Account Key Setup (Network Nodes)
   hosts: cluster1_network_node:cluster2_network_node
   gather_facts: false

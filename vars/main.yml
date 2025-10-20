@@ -46,7 +46,7 @@ model_configs:
     args: ["--max-model-len", "240000", "--tensor-parallel-size", "4"]
 
 # Deployment configuration
-keyring_password: "{{ lookup('env', 'GONKA_KEYRING_PASSWORD') | default('PLACEHOLDER_PASSWORD', true) }}"
+keyring_password: "{{ lookup('env', 'GONKA_KEYRING_PASSWORD', errors='strict') }}"
 key_name: "gonka-ml-key"
 
 # Directory paths
